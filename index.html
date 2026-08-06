@@ -3,16 +3,422 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>boxinternet</title>
+<title>Journal — boxinternet</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#f5f5f7; color:#1d1d1f; text-align:center; padding:60px 20px; }
-  h1 { color:#0071e3; }
-  p { color:#86868b; }
+  :root {
+    --bg: #0d1210;
+    --panel: #131a17;
+    --border: #223028;
+    --text: #d7e4dc;
+    --text-dim: #7c9187;
+    --accent: #4fd980;
+    --accent-dim: #2c7a4b;
+    --err: #ff6b6b;
+    --mono: "IBM Plex Mono", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      linear-gradient(rgba(79,217,128,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,217,128,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color: var(--text);
+    font-family: var(--mono);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 60px;
+  }
+
+  .topbar {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 28px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .brand .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    display: inline-block;
+  }
+  h1 {
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+    font-weight: 600;
+  }
+  .repo-tag {
+    color: var(--text-dim);
+    font-size: 0.78rem;
+  }
+  .version {
+    color: var(--accent-dim);
+    font-size: 0.75rem;
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 860px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px;
+  }
+
+  .meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 14px;
+  }
+  .meta-line span b { color: var(--text); font-weight: 500; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  button {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+    letter-spacing: 0.02em;
+  }
+  button:hover { border-color: var(--accent-dim); color: var(--accent); }
+  button:active { transform: translateY(1px); }
+
+  #btn-journal {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  #btn-journal:hover { background: #6ee89b; border-color: #6ee89b; color: var(--bg); }
+  #btn-journal:disabled { opacity: 0.5; cursor: wait; }
+
+  .token-status {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .token-status .led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #555;
+  }
+  .token-status.set .led { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  .status-line {
+    font-size: 0.78rem;
+    min-height: 18px;
+    margin-bottom: 10px;
+    color: var(--text-dim);
+  }
+  .status-line.error { color: var(--err); }
+  .status-line.ok { color: var(--accent); }
+
+  textarea {
+    width: 100%;
+    min-height: 420px;
+    max-height: 70vh;
+    resize: vertical;
+    background: #0a0f0d;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    white-space: pre;
+    overflow: auto;
+  }
+  textarea::placeholder { color: #4a5c52; }
+
+  footer {
+    max-width: 860px;
+    width: 100%;
+    text-align: right;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    margin-top: 10px;
+  }
+
+  /* modal for token entry */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    width: 90%;
+    max-width: 420px;
+  }
+  .modal h2 {
+    font-size: 0.95rem;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .modal p {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+  .modal input {
+    width: 100%;
+    font-family: var(--mono);
+    background: #0a0f0d;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .modal-actions button.secondary { border-color: var(--border); color: var(--text-dim); }
+  .modal-actions button.danger { border-color: var(--err); color: var(--err); }
 </style>
 </head>
 <body>
-<h1>boxinternet</h1>
-<p>Nouvelle application créée avec Le Déployeur.</p>
-<p>Déploie ton code depuis l'étape 3 pour remplacer cette page.</p>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Journal</h1>
+      <span class="repo-tag">Hammerinhank/boxinternet · main</span>
+    </div>
+    <div class="version" id="version-badge">v1.0.0</div>
+  </div>
+
+  <div class="card">
+    <div class="meta-line">
+      <span>fichier&nbsp;: <b>activity.json</b></span>
+      <span>dépôt&nbsp;: <b>Hammerinhank/boxinternet</b></span>
+      <span>branche&nbsp;: <b>main</b></span>
+      <span id="last-fetch">dernière lecture&nbsp;: <b>—</b></span>
+    </div>
+
+    <div class="controls">
+      <button id="btn-journal">▶ Journal</button>
+      <button id="btn-token">🔑 Token</button>
+      <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
+    </div>
+
+    <div class="status-line" id="status"></div>
+
+    <textarea id="output" readonly placeholder="Le contenu de activity.json apparaîtra ici après un clic sur « Journal »…"></textarea>
+  </div>
+
+  <footer>boxinternet journal viewer</footer>
+
+  <!-- Modale token -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2>Token GitHub</h2>
+      <p>Le token est stocké uniquement dans le localStorage de ce navigateur (jamais envoyé ailleurs qu'à l'API GitHub). Nécessaire si le dépôt est privé.</p>
+      <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <div class="modal-actions">
+        <button class="danger" id="btn-clear-token">Effacer</button>
+        <button class="secondary" id="btn-cancel-token">Annuler</button>
+        <button id="btn-save-token">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ---- Config en dur ----
+  const OWNER = "Hammerinhank";
+  const REPO = "boxinternet";
+  const BRANCH = "main";
+  const FILE_PATH = "activity.json";
+
+  // ---- Version : à incrémenter à chaque évolution ----
+  const APP_VERSION = "1.0.0";
+  document.getElementById("version-badge").textContent = "v" + APP_VERSION;
+
+  const STORAGE_KEY = "boxinternet_journal_gh_token";
+
+  const btnJournal = document.getElementById("btn-journal");
+  const btnToken = document.getElementById("btn-token");
+  const output = document.getElementById("output");
+  const statusEl = document.getElementById("status");
+  const lastFetchEl = document.getElementById("last-fetch").querySelector("b");
+  const tokenStatus = document.getElementById("token-status");
+  const tokenStatusText = document.getElementById("token-status-text");
+
+  const overlay = document.getElementById("overlay");
+  const tokenInput = document.getElementById("token-input");
+  const btnSaveToken = document.getElementById("btn-save-token");
+  const btnCancelToken = document.getElementById("btn-cancel-token");
+  const btnClearToken = document.getElementById("btn-clear-token");
+
+  function getToken() {
+    return localStorage.getItem(STORAGE_KEY) || "";
+  }
+
+  function refreshTokenBadge() {
+    const t = getToken();
+    if (t) {
+      tokenStatus.classList.add("set");
+      tokenStatusText.textContent = "token enregistré (" + t.slice(0, 4) + "…" + t.slice(-4) + ")";
+    } else {
+      tokenStatus.classList.remove("set");
+      tokenStatusText.textContent = "token non défini";
+    }
+  }
+
+  function setStatus(msg, type) {
+    statusEl.textContent = msg || "";
+    statusEl.classList.remove("error", "ok");
+    if (type) statusEl.classList.add(type);
+  }
+
+  // ---- Modale token ----
+  btnToken.addEventListener("click", () => {
+    tokenInput.value = getToken();
+    overlay.classList.add("show");
+    tokenInput.focus();
+  });
+  btnCancelToken.addEventListener("click", () => overlay.classList.remove("show"));
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("show"); });
+
+  btnSaveToken.addEventListener("click", () => {
+    const val = tokenInput.value.trim();
+    if (val) {
+      localStorage.setItem(STORAGE_KEY, val);
+      setStatus("Token enregistré.", "ok");
+    }
+    refreshTokenBadge();
+    overlay.classList.remove("show");
+  });
+
+  btnClearToken.addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY);
+    tokenInput.value = "";
+    refreshTokenBadge();
+    setStatus("Token supprimé.", "ok");
+    overlay.classList.remove("show");
+  });
+
+  // ---- Lecture du fichier via l'API GitHub ----
+  function base64ToUtf8(b64) {
+    const clean = b64.replace(/\n/g, "");
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  function prettyPrintIfJson(text) {
+    try {
+      const parsed = JSON.parse(text);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return text; // pas du JSON valide, on affiche tel quel
+    }
+  }
+
+  async function fetchJournal() {
+    const token = getToken();
+    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(FILE_PATH)}?ref=${BRANCH}`;
+
+    btnJournal.disabled = true;
+    setStatus("Lecture de " + FILE_PATH + " en cours…");
+    output.value = "";
+
+    try {
+      const headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      };
+      if (token) headers["Authorization"] = "Bearer " + token;
+
+      const res = await fetch(url, { headers });
+
+      if (res.status === 404) {
+        throw new Error("Fichier ou dépôt introuvable (404). Vérifiez le nom du fichier, ou que le token a accès au dépôt s'il est privé.");
+      }
+      if (res.status === 401) {
+        throw new Error("Token invalide ou expiré (401).");
+      }
+      if (res.status === 403) {
+        throw new Error("Accès refusé (403) — token manquant/insuffisant, ou limite de requêtes atteinte.");
+      }
+      if (!res.ok) {
+        throw new Error("Erreur HTTP " + res.status + " (" + res.statusText + ")");
+      }
+
+      const data = await res.json();
+
+      if (data.encoding !== "base64" || !data.content) {
+        throw new Error("Réponse inattendue de l'API GitHub (pas de contenu base64).");
+      }
+
+      const decoded = base64ToUtf8(data.content);
+      output.value = prettyPrintIfJson(decoded);
+
+      const now = new Date();
+      lastFetchEl.textContent = now.toLocaleString("fr-FR");
+      setStatus("Lecture réussie (" + decoded.length + " caractères).", "ok");
+    } catch (err) {
+      setStatus("Erreur : " + err.message, "error");
+      output.value = "";
+    } finally {
+      btnJournal.disabled = false;
+    }
+  }
+
+  btnJournal.addEventListener("click", fetchJournal);
+
+  // init
+  refreshTokenBadge();
+</script>
 </body>
 </html>
