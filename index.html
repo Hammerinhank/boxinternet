@@ -117,14 +117,14 @@
   button:hover { border-color: var(--accent-dim); color: var(--accent); }
   button:active { transform: translateY(1px); }
 
-  #btn-journal {
+  #btn-summary {
     color: var(--bg);
     background: var(--accent);
     border-color: var(--accent);
     font-weight: 600;
   }
-  #btn-journal:hover { background: #6ee89b; border-color: #6ee89b; color: var(--bg); }
-  #btn-journal:disabled { opacity: 0.5; cursor: wait; }
+  #btn-summary:hover { background: #6ee89b; border-color: #6ee89b; color: var(--bg); }
+  #btn-summary:disabled { opacity: 0.5; cursor: wait; }
 
   .token-status {
     font-size: 0.75rem;
@@ -273,8 +273,8 @@
     </div>
 
     <div class="controls">
-      <button id="btn-journal">▶ Journal</button>
       <button id="btn-summary">≣ Résumé</button>
+      <button id="btn-journal">▶ Journal</button>
       <button id="btn-token">🔑 Token</button>
       <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
     </div>
@@ -309,7 +309,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.2.0";
+  const APP_VERSION = "1.2.1";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
