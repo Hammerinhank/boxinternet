@@ -140,6 +140,33 @@
   }
   .token-status.set .led { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 
+  /* ---- Encadré « dernier relevé » sous la ligne de boutons ---- */
+  .highlight-box {
+    display: none;
+    background: #0a0f0d;
+    border: 1px solid var(--accent-dim);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+  }
+  .highlight-box.show { display: block; }
+  .highlight-label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .highlight-text {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+  .highlight-text.ok { color: #8dffb0; text-shadow: 0 0 10px rgba(141,255,176,0.55); }
+  .highlight-text.bad { color: #ff9a9a; text-shadow: 0 0 10px rgba(255,154,154,0.55); }
+  .highlight-text.unknown { color: #eef4f0; }
+
   .status-line {
     font-size: 0.78rem;
     min-height: 18px;
@@ -187,9 +214,12 @@
     padding: 2px 0;
     white-space: pre-wrap;
   }
-  #output-summary .row.ok { color: var(--accent); }
-  #output-summary .row.bad { color: var(--err); }
-  #output-summary .row.unknown { color: var(--text-dim); }
+  /* Lignes très lumineuses */
+  #output-summary .row.ok { color: #8dffb0; text-shadow: 0 0 8px rgba(141,255,176,0.5); }
+  #output-summary .row.bad { color: #ff9a9a; text-shadow: 0 0 8px rgba(255,154,154,0.5); }
+  #output-summary .row.unknown { color: #eef4f0; text-shadow: 0 0 6px rgba(238,244,240,0.3); }
+  /* Dernière ligne en gras */
+  #output-summary .row.last { font-weight: 700; }
   #output-summary .empty {
     color: var(--text-dim);
   }
@@ -279,6 +309,11 @@
       <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
     </div>
 
+    <div class="highlight-box" id="highlight-box">
+      <span class="highlight-label">Dernier relevé</span>
+      <span class="highlight-text" id="highlight-text"></span>
+    </div>
+
     <div class="status-line" id="status"></div>
 
     <textarea id="output" readonly placeholder="Le contenu de activity.json apparaîtra ici après un clic sur « Journal »…"></textarea>
@@ -309,7 +344,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.2.2";
+  const APP_VERSION = "1.3.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
@@ -323,6 +358,8 @@
   const lastFetchEl = document.getElementById("last-fetch").querySelector("b");
   const tokenStatus = document.getElementById("token-status");
   const tokenStatusText = document.getElementById("token-status-text");
+  const highlightBox = document.getElementById("highlight-box");
+  const highlightText = document.getElementById("highlight-text");
 
   const overlay = document.getElementById("overlay");
   const tokenInput = document.getElementById("token-input");
@@ -349,6 +386,18 @@
     statusEl.textContent = msg || "";
     statusEl.classList.remove("error", "ok");
     if (type) statusEl.classList.add(type);
+  }
+
+  function hideHighlight() {
+    highlightBox.classList.remove("show");
+    highlightText.textContent = "";
+    highlightText.className = "highlight-text";
+  }
+
+  function showHighlight(text, state) {
+    highlightText.textContent = text;
+    highlightText.className = "highlight-text" + (state ? " " + state : "");
+    highlightBox.classList.add("show");
   }
 
   // ---- Modale token ----
@@ -443,6 +492,7 @@
     btnSummary.disabled = true;
     setStatus("Lecture de " + FILE_PATH + " en cours…");
     showTextView();
+    hideHighlight();
     output.value = "";
 
     try {
@@ -543,33 +593,54 @@
     return null; // pas d'info explicite
   }
 
+  // Construit le libellé de statut lisible (utilisé pour les lignes ET l'encadré)
+  function buildStatusLabel(rec, forHighlight) {
+    const rebootFlag = extractRebootFlag(rec);
+    const networkOk = extractNetworkOk(rec);
+
+    let isOk, label;
+    if (rebootFlag === true) {
+      isOk = false;
+      label = forHighlight
+        ? "un redémarrage a été déclenché" + (rec.raison ? ` (motif : ${rec.raison})` : "")
+        : "reboot déclenché" + (rec.raison ? ` (${rec.raison})` : "");
+    } else if (networkOk === false) {
+      isOk = false;
+      label = forHighlight
+        ? "le réseau était en panne" + (rec.raison ? ` (motif : ${rec.raison})` : "")
+        : "réseau en panne" + (rec.raison ? ` (${rec.raison})` : "");
+    } else if (rebootFlag === false || networkOk === true) {
+      isOk = true;
+      label = forHighlight ? "le réseau fonctionnait normalement" : "OK";
+    } else {
+      isOk = null;
+      label = forHighlight ? "statut inconnu (champs non reconnus)" : "statut inconnu (champs non reconnus)";
+    }
+
+    return { isOk, label };
+  }
+
   function buildSummaryRows(records) {
     return records.map((rec, i) => {
       const date = extractDate(rec);
       const dateLabel = date ? formatDateFr(date) : `enregistrement #${i + 1} (date inconnue)`;
-
-      const rebootFlag = extractRebootFlag(rec);
-      const networkOk = extractNetworkOk(rec);
-
-      // Priorité : un reboot déclenché est l'événement le plus significatif.
-      // Sinon on retombe sur l'état réseau observé lors de ce test.
-      let isOk, label;
-      if (rebootFlag === true) {
-        isOk = false;
-        label = "reboot déclenché" + (rec.raison ? ` (${rec.raison})` : "");
-      } else if (networkOk === false) {
-        isOk = false;
-        label = "réseau en panne" + (rec.raison ? ` (${rec.raison})` : "");
-      } else if (rebootFlag === false || networkOk === true) {
-        isOk = true;
-        label = "OK";
-      } else {
-        isOk = null;
-        label = "statut inconnu (champs non reconnus)";
-      }
+      const { isOk, label } = buildStatusLabel(rec, false);
 
       return { text: `${dateLabel} — ${label}`, state: isOk === true ? "ok" : isOk === false ? "bad" : "unknown" };
     });
+  }
+
+  // Phrase claire et complète pour l'encadré « Dernier relevé »
+  function buildHighlightSentence(rec, index) {
+    const date = extractDate(rec);
+    const dateLabel = date ? formatDateFr(date) : `Enregistrement #${index + 1} (date inconnue)`;
+    const dateLabelCap = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
+    const { isOk, label } = buildStatusLabel(rec, true);
+
+    return {
+      text: `${dateLabelCap} : ${label}.`,
+      state: isOk === true ? "ok" : isOk === false ? "bad" : "unknown"
+    };
   }
 
   async function fetchSummary() {
@@ -577,6 +648,7 @@
     btnSummary.disabled = true;
     setStatus("Lecture de " + FILE_PATH + " en cours…");
     showSummaryView();
+    hideHighlight();
     outputSummary.innerHTML = "";
 
     try {
@@ -605,8 +677,13 @@
 
       const rows = buildSummaryRows(records);
       outputSummary.innerHTML = rows
-        .map(r => `<div class="row ${r.state}">${r.text.replace(/</g, "&lt;")}</div>`)
+        .map((r, idx) => `<div class="row ${r.state}${idx === rows.length - 1 ? " last" : ""}">${r.text.replace(/</g, "&lt;")}</div>`)
         .join("");
+
+      // Encadré « dernier relevé » sous les boutons
+      const lastRec = records[records.length - 1];
+      const highlight = buildHighlightSentence(lastRec, records.length - 1);
+      showHighlight(highlight.text, highlight.state);
 
       const now = new Date();
       lastFetchEl.textContent = now.toLocaleString("fr-FR");
@@ -614,6 +691,7 @@
     } catch (err) {
       setStatus("Erreur : " + err.message, "error");
       outputSummary.innerHTML = "";
+      hideHighlight();
     } finally {
       btnJournal.disabled = false;
       btnSummary.disabled = false;
