@@ -309,7 +309,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.1.0";
+  const APP_VERSION = "1.2.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
@@ -479,7 +479,7 @@
 
   // Essaie de trouver une date exploitable dans plusieurs formats de champs courants
   function extractDate(rec) {
-    const candidates = [rec.date, rec.timestamp, rec.time, rec.ts, rec.datetime, rec.created_at, rec.recorded_at];
+    const candidates = [rec.heure, rec.date, rec.timestamp, rec.time, rec.ts, rec.datetime, rec.created_at, rec.recorded_at, rec.date_heure];
     for (const c of candidates) {
       if (c === undefined || c === null) continue;
       // timestamp numérique (secondes ou millisecondes)
@@ -498,6 +498,10 @@
 
   // Détecte s'il y a eu un reboot sur cet enregistrement
   function extractRebootFlag(rec) {
+    // Schéma boxinternet : "decision_reboot": true/false
+    if (typeof rec.decision_reboot === "boolean") return rec.decision_reboot;
+
+    // Filet de sécurité si le format évolue
     const candidates = [rec.reboot, rec.rebooted, rec.reboots, rec.restart, rec.restarted, rec.reboot_count, rec.nb_reboots];
     for (const c of candidates) {
       if (c === undefined || c === null) continue;
@@ -514,8 +518,18 @@
     return null; // inconnu
   }
 
-  // Détecte l'état du réseau si le champ existe explicitement
+  // Détecte l'état du réseau : schéma boxinternet -> tous les tests_tcp[].ok === true
   function extractNetworkOk(rec) {
+    if (Array.isArray(rec.tests_tcp) && rec.tests_tcp.length > 0) {
+      return rec.tests_tcp.every(t => t && t.ok === true);
+    }
+    if (typeof rec.raison === "string") {
+      const r = rec.raison.trim().toLowerCase();
+      if (r === "internet_ok") return true;
+      if (r.length > 0) return false; // toute autre raison = problème détecté
+    }
+
+    // Filet de sécurité si le format évolue
     const candidates = [rec.network, rec.online, rec.internet, rec.status, rec.network_ok, rec.internet_ok];
     for (const c of candidates) {
       if (c === undefined || c === null) continue;
@@ -537,15 +551,15 @@
       const rebootFlag = extractRebootFlag(rec);
       const networkOk = extractNetworkOk(rec);
 
-      // Le réseau est considéré en panne si un flag réseau explicite dit "down",
-      // ou sinon, à défaut, s'il y a eu un reboot.
+      // Priorité : un reboot déclenché est l'événement le plus significatif.
+      // Sinon on retombe sur l'état réseau observé lors de ce test.
       let isOk, label;
-      if (networkOk === false) {
+      if (rebootFlag === true) {
         isOk = false;
-        label = "réseau en panne";
-      } else if (rebootFlag === true) {
+        label = "reboot déclenché" + (rec.raison ? ` (${rec.raison})` : "");
+      } else if (networkOk === false) {
         isOk = false;
-        label = "reboot détecté";
+        label = "réseau en panne" + (rec.raison ? ` (${rec.raison})` : "");
       } else if (rebootFlag === false || networkOk === true) {
         isOk = true;
         label = "pas de reboot";
