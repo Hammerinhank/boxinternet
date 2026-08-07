@@ -167,6 +167,33 @@
   }
   textarea::placeholder { color: #4a5c52; }
 
+  #output-summary {
+    width: 100%;
+    min-height: 420px;
+    max-height: 70vh;
+    resize: vertical;
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 1.9;
+    overflow: auto;
+    display: none;
+  }
+  #output-summary.show { display: block; }
+  #output-summary .row {
+    padding: 2px 0;
+    white-space: pre-wrap;
+  }
+  #output-summary .row.ok { color: var(--accent); }
+  #output-summary .row.bad { color: var(--err); }
+  #output-summary .row.unknown { color: var(--text-dim); }
+  #output-summary .empty {
+    color: var(--text-dim);
+  }
+
   footer {
     max-width: 860px;
     width: 100%;
@@ -247,6 +274,7 @@
 
     <div class="controls">
       <button id="btn-journal">▶ Journal</button>
+      <button id="btn-summary">≣ Résumé</button>
       <button id="btn-token">🔑 Token</button>
       <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
     </div>
@@ -254,6 +282,7 @@
     <div class="status-line" id="status"></div>
 
     <textarea id="output" readonly placeholder="Le contenu de activity.json apparaîtra ici après un clic sur « Journal »…"></textarea>
+    <div id="output-summary"></div>
   </div>
 
   <footer>boxinternet journal viewer</footer>
@@ -280,14 +309,16 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "1.1.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
 
   const btnJournal = document.getElementById("btn-journal");
+  const btnSummary = document.getElementById("btn-summary");
   const btnToken = document.getElementById("btn-token");
   const output = document.getElementById("output");
+  const outputSummary = document.getElementById("output-summary");
   const statusEl = document.getElementById("status");
   const lastFetchEl = document.getElementById("last-fetch").querySelector("b");
   const tokenStatus = document.getElementById("token-status");
@@ -365,43 +396,57 @@
     }
   }
 
-  async function fetchJournal() {
+  async function fetchRawFile() {
     const token = getToken();
     const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(FILE_PATH)}?ref=${BRANCH}`;
 
+    const headers = {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+    if (token) headers["Authorization"] = "Bearer " + token;
+
+    const res = await fetch(url, { headers });
+
+    if (res.status === 404) {
+      throw new Error("Fichier ou dépôt introuvable (404). Vérifiez le nom du fichier, ou que le token a accès au dépôt s'il est privé.");
+    }
+    if (res.status === 401) {
+      throw new Error("Token invalide ou expiré (401).");
+    }
+    if (res.status === 403) {
+      throw new Error("Accès refusé (403) — token manquant/insuffisant, ou limite de requêtes atteinte.");
+    }
+    if (!res.ok) {
+      throw new Error("Erreur HTTP " + res.status + " (" + res.statusText + ")");
+    }
+
+    const data = await res.json();
+    if (data.encoding !== "base64" || !data.content) {
+      throw new Error("Réponse inattendue de l'API GitHub (pas de contenu base64).");
+    }
+
+    return base64ToUtf8(data.content);
+  }
+
+  function showTextView() {
+    outputSummary.classList.remove("show");
+    output.style.display = "";
+  }
+  function showSummaryView() {
+    output.style.display = "none";
+    outputSummary.classList.add("show");
+  }
+
+  async function fetchJournal() {
     btnJournal.disabled = true;
+    btnSummary.disabled = true;
     setStatus("Lecture de " + FILE_PATH + " en cours…");
+    showTextView();
     output.value = "";
 
     try {
-      const headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      };
-      if (token) headers["Authorization"] = "Bearer " + token;
-
-      const res = await fetch(url, { headers });
-
-      if (res.status === 404) {
-        throw new Error("Fichier ou dépôt introuvable (404). Vérifiez le nom du fichier, ou que le token a accès au dépôt s'il est privé.");
-      }
-      if (res.status === 401) {
-        throw new Error("Token invalide ou expiré (401).");
-      }
-      if (res.status === 403) {
-        throw new Error("Accès refusé (403) — token manquant/insuffisant, ou limite de requêtes atteinte.");
-      }
-      if (!res.ok) {
-        throw new Error("Erreur HTTP " + res.status + " (" + res.statusText + ")");
-      }
-
-      const data = await res.json();
-
-      if (data.encoding !== "base64" || !data.content) {
-        throw new Error("Réponse inattendue de l'API GitHub (pas de contenu base64).");
-      }
-
-      const decoded = base64ToUtf8(data.content);
+      const decoded = await fetchRawFile();
       output.value = prettyPrintIfJson(decoded);
 
       const now = new Date();
@@ -412,10 +457,156 @@
       output.value = "";
     } finally {
       btnJournal.disabled = false;
+      btnSummary.disabled = false;
     }
   }
 
   btnJournal.addEventListener("click", fetchJournal);
+
+  // ---- Résumé ----
+
+  const JOURS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+  function formatDateFr(date) {
+    const jour = JOURS_FR[date.getDay()];
+    const j = date.getDate();
+    const mois = MOIS_FR[date.getMonth()];
+    const h = String(date.getHours()).padStart(2, "0");
+    const m = String(date.getMinutes()).padStart(2, "0");
+    return `${jour} ${j} ${mois}, à ${h}h${m}`;
+  }
+
+  // Essaie de trouver une date exploitable dans plusieurs formats de champs courants
+  function extractDate(rec) {
+    const candidates = [rec.date, rec.timestamp, rec.time, rec.ts, rec.datetime, rec.created_at, rec.recorded_at];
+    for (const c of candidates) {
+      if (c === undefined || c === null) continue;
+      // timestamp numérique (secondes ou millisecondes)
+      if (typeof c === "number") {
+        const ms = c < 1e12 ? c * 1000 : c;
+        const d = new Date(ms);
+        if (!isNaN(d)) return d;
+      }
+      if (typeof c === "string") {
+        const d = new Date(c);
+        if (!isNaN(d)) return d;
+      }
+    }
+    return null;
+  }
+
+  // Détecte s'il y a eu un reboot sur cet enregistrement
+  function extractRebootFlag(rec) {
+    const candidates = [rec.reboot, rec.rebooted, rec.reboots, rec.restart, rec.restarted, rec.reboot_count, rec.nb_reboots];
+    for (const c of candidates) {
+      if (c === undefined || c === null) continue;
+      if (typeof c === "boolean") return c;
+      if (typeof c === "number") return c > 0;
+      if (typeof c === "string") {
+        const v = c.trim().toLowerCase();
+        if (["true", "yes", "oui", "1"].includes(v)) return true;
+        if (["false", "no", "non", "0"].includes(v)) return false;
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) return n > 0;
+      }
+    }
+    return null; // inconnu
+  }
+
+  // Détecte l'état du réseau si le champ existe explicitement
+  function extractNetworkOk(rec) {
+    const candidates = [rec.network, rec.online, rec.internet, rec.status, rec.network_ok, rec.internet_ok];
+    for (const c of candidates) {
+      if (c === undefined || c === null) continue;
+      if (typeof c === "boolean") return c;
+      if (typeof c === "string") {
+        const v = c.trim().toLowerCase();
+        if (["ok", "up", "online", "true", "connected", "reachable"].includes(v)) return true;
+        if (["down", "offline", "false", "disconnected", "unreachable", "ko"].includes(v)) return false;
+      }
+    }
+    return null; // pas d'info explicite
+  }
+
+  function buildSummaryRows(records) {
+    return records.map((rec, i) => {
+      const date = extractDate(rec);
+      const dateLabel = date ? formatDateFr(date) : `enregistrement #${i + 1} (date inconnue)`;
+
+      const rebootFlag = extractRebootFlag(rec);
+      const networkOk = extractNetworkOk(rec);
+
+      // Le réseau est considéré en panne si un flag réseau explicite dit "down",
+      // ou sinon, à défaut, s'il y a eu un reboot.
+      let isOk, label;
+      if (networkOk === false) {
+        isOk = false;
+        label = "réseau en panne";
+      } else if (rebootFlag === true) {
+        isOk = false;
+        label = "reboot détecté";
+      } else if (rebootFlag === false || networkOk === true) {
+        isOk = true;
+        label = "pas de reboot";
+      } else {
+        isOk = null;
+        label = "statut inconnu (champs non reconnus)";
+      }
+
+      return { text: `${dateLabel} — ${label}`, state: isOk === true ? "ok" : isOk === false ? "bad" : "unknown" };
+    });
+  }
+
+  async function fetchSummary() {
+    btnJournal.disabled = true;
+    btnSummary.disabled = true;
+    setStatus("Lecture de " + FILE_PATH + " en cours…");
+    showSummaryView();
+    outputSummary.innerHTML = "";
+
+    try {
+      const decoded = await fetchRawFile();
+      let parsed;
+      try {
+        parsed = JSON.parse(decoded);
+      } catch (e) {
+        throw new Error("Le fichier ne contient pas du JSON valide, impossible de le résumer.");
+      }
+
+      const records = Array.isArray(parsed) ? parsed
+        : Array.isArray(parsed.records) ? parsed.records
+        : Array.isArray(parsed.entries) ? parsed.entries
+        : Array.isArray(parsed.activities) ? parsed.activities
+        : null;
+
+      if (!records) {
+        throw new Error("Format inattendu : impossible de trouver un tableau d'enregistrements dans le JSON.");
+      }
+      if (records.length === 0) {
+        outputSummary.innerHTML = '<div class="empty">Aucun enregistrement dans le fichier.</div>';
+        setStatus("Lecture réussie, mais le journal est vide.", "ok");
+        return;
+      }
+
+      const rows = buildSummaryRows(records);
+      outputSummary.innerHTML = rows
+        .map(r => `<div class="row ${r.state}">${r.text.replace(/</g, "&lt;")}</div>`)
+        .join("");
+
+      const now = new Date();
+      lastFetchEl.textContent = now.toLocaleString("fr-FR");
+      setStatus(`Résumé généré (${records.length} enregistrement${records.length > 1 ? "s" : ""}).`, "ok");
+    } catch (err) {
+      setStatus("Erreur : " + err.message, "error");
+      outputSummary.innerHTML = "";
+    } finally {
+      btnJournal.disabled = false;
+      btnSummary.disabled = false;
+    }
+  }
+
+  btnSummary.addEventListener("click", fetchSummary);
 
   // init
   refreshTokenBadge();
