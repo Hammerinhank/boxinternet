@@ -309,7 +309,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.2.1";
+  const APP_VERSION = "1.2.2";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
@@ -562,7 +562,7 @@
         label = "réseau en panne" + (rec.raison ? ` (${rec.raison})` : "");
       } else if (rebootFlag === false || networkOk === true) {
         isOk = true;
-        label = "pas de reboot";
+        label = "OK";
       } else {
         isOk = null;
         label = "statut inconnu (champs non reconnus)";
