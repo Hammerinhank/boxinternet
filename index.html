@@ -38,7 +38,7 @@
     max-width: 860px;
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin-bottom: 28px;
   }
 
@@ -66,12 +66,16 @@
     font-size: 0.78rem;
   }
   .version {
-    color: var(--accent-dim);
-    font-size: 0.75rem;
-    border: 1px solid var(--border);
-    padding: 3px 8px;
-    border-radius: 3px;
+    color: var(--bg);
+    background: var(--accent);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 6px 14px;
+    border-radius: 5px;
     white-space: nowrap;
+    box-shadow: 0 0 12px rgba(79,217,128,0.55);
+    border: 1px solid var(--accent);
   }
 
   .card {
@@ -218,7 +222,7 @@
   #output-summary .row.ok { color: #8dffb0; text-shadow: 0 0 8px rgba(141,255,176,0.5); }
   #output-summary .row.bad { color: #ff9a9a; text-shadow: 0 0 8px rgba(255,154,154,0.5); }
   #output-summary .row.unknown { color: #eef4f0; text-shadow: 0 0 6px rgba(238,244,240,0.3); }
-  /* Dernière ligne en gras */
+  /* Ligne la plus récente (première affichée) en gras */
   #output-summary .row.last { font-weight: 700; }
   #output-summary .empty {
     color: var(--text-dim);
@@ -344,7 +348,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.3.1";
+  const APP_VERSION = "1.4.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
@@ -620,10 +624,13 @@
     return { isOk, label };
   }
 
+  // Construit les lignes du résumé en ordre chronologique inverse (le plus récent en premier)
   function buildSummaryRows(records) {
-    return records.map((rec, i) => {
+    const reversed = records.slice().reverse();
+    return reversed.map((rec, i) => {
+      const originalIndex = records.length - 1 - i;
       const date = extractDate(rec);
-      const dateLabel = date ? formatDateFr(date) : `enregistrement #${i + 1} (date inconnue)`;
+      const dateLabel = date ? formatDateFr(date) : `enregistrement #${originalIndex + 1} (date inconnue)`;
       const { isOk, label } = buildStatusLabel(rec, false);
 
       return { text: `${dateLabel} — ${label}`, state: isOk === true ? "ok" : isOk === false ? "bad" : "unknown" };
@@ -675,12 +682,13 @@
         return;
       }
 
+      // Lignes affichées du plus récent au plus ancien ; la première ligne (la plus récente) est mise en avant
       const rows = buildSummaryRows(records);
       outputSummary.innerHTML = rows
-        .map((r, idx) => `<div class="row ${r.state}${idx === rows.length - 1 ? " last" : ""}">${r.text.replace(/</g, "&lt;")}</div>`)
+        .map((r, idx) => `<div class="row ${r.state}${idx === 0 ? " last" : ""}">${r.text.replace(/</g, "&lt;")}</div>`)
         .join("");
 
-      // Encadré « dernier relevé » sous les boutons
+      // Encadré « dernier relevé » sous les boutons : toujours le relevé le plus récent
       const lastRec = records[records.length - 1];
       const highlight = buildHighlightSentence(lastRec, records.length - 1);
       showHighlight(highlight.text, highlight.state);
