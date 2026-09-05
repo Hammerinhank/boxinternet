@@ -225,6 +225,7 @@
   }
   .status-line.error { color: var(--err); }
   .status-line.ok { color: var(--accent); }
+  .status-line.warn { color: #ffb648; }
 
   textarea {
     width: 100%;
@@ -651,7 +652,7 @@
         <button class="primary" id="btn-ajouter">＋ Ajouter et enregistrer</button>
         <button id="btn-copier-json">📋 Copier monitoring.json</button>
       </div>
-      <div class="status" id="statut-config"></div>
+      <div class="status-line" id="statut-config"></div>
 
       <h3 class="section-titre">Scripts déjà déclarés</h3>
       <div id="liste-config"></div>
@@ -683,8 +684,11 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.7.0";
+  const APP_VERSION = "1.7.1";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
+
+  // Raccourci utilisé par toute la vue « Configurer »
+  const $ = id => document.getElementById(id);
 
   // Fichiers de la surveillance multi-scripts
   const MONITORING_PATH = "monitoring.json";
@@ -736,6 +740,12 @@
     statusEl.textContent = msg || "";
     statusEl.classList.remove("error", "ok");
     if (type) statusEl.classList.add(type);
+  }
+
+  // Affiche un message dans la zone de statut de la vue Configurer
+  function setStatusConfig(msg, type) {
+    statutConfig.textContent = msg || "";
+    statutConfig.className = "status-line" + (type ? " " + type : "");
   }
 
   function hideHighlight() {
@@ -1687,7 +1697,7 @@
 
   $("btn-valider").addEventListener("click", () => {
     const ok = validerFormulaire(false);
-    setStatut(statutConfig,
+    setStatusConfig(
       ok ? "Tout est correct : tu peux enregistrer." : "Corrige les points signalés en rouge ci-dessus.",
       ok ? "ok" : "error");
   });
@@ -1704,11 +1714,11 @@
 
   $("btn-ajouter").addEventListener("click", async () => {
     if (!validerFormulaire(false)) {
-      setStatut(statutConfig, "Corrige les points signalés avant d'enregistrer.", "error");
+      setStatusConfig( "Corrige les points signalés avant d'enregistrer.", "error");
       return;
     }
     if (!configMonitoring) {
-      setStatut(statutConfig, "monitoring.json n'a pas pu être lu : recharge la page.", "error");
+      setStatusConfig( "monitoring.json n'a pas pu être lu : recharge la page.", "error");
       return;
     }
 
@@ -1719,10 +1729,10 @@
     configMonitoring.scripts.push(entree);
 
     $("btn-ajouter").disabled = true;
-    setStatut(statutConfig, "Enregistrement sur GitHub…");
+    setStatusConfig( "Enregistrement sur GitHub…");
     try {
       await enregistrerMonitoring(`Surveillance : ajout de ${entree.id}`);
-      setStatut(statutConfig,
+      setStatusConfig(
         `« ${entree.nom} » est déclaré.`
         + (entree.type === "heartbeat"
             ? " Il reste à ajouter la ligne d'appel à heartbeat.py à la fin du script, sinon il sera signalé muet dès demain matin."
@@ -1733,7 +1743,7 @@
       chargerScripts().catch(() => {});
     } catch (err) {
       configMonitoring.scripts.pop();   // on annule l'ajout local si l'écriture a échoué
-      setStatut(statutConfig, "Échec : " + err.message, "error");
+      setStatusConfig( "Échec : " + err.message, "error");
     } finally {
       $("btn-ajouter").disabled = false;
     }
@@ -1798,16 +1808,16 @@
       + "Son fichier de suivi, lui, reste dans le dépôt.")) return;
 
     liste.splice(index, 1);
-    setStatut(statutConfig, "Enregistrement sur GitHub…");
+    setStatusConfig( "Enregistrement sur GitHub…");
     try {
       await enregistrerMonitoring(`Surveillance : retrait de ${id}`);
-      setStatut(statutConfig, `« ${entree.nom || id} » n'est plus surveillé.`, "ok");
+      setStatusConfig( `« ${entree.nom || id} » n'est plus surveillé.`, "ok");
       renderListeConfig();
       validerFormulaire(true);   // l'identifiant redevient disponible
       chargerScripts().catch(() => {});
     } catch (err) {
       liste.splice(index, 0, entree);   // on remet l'entrée si l'écriture a échoué
-      setStatut(statutConfig, "Échec : " + err.message, "error");
+      setStatusConfig( "Échec : " + err.message, "error");
       renderListeConfig();
     }
   }
@@ -1816,9 +1826,9 @@
     if (!configMonitoring) return;
     try {
       await navigator.clipboard.writeText(texteMonitoring());
-      setStatut(statutConfig, "monitoring.json copié : tu peux le coller à la main dans le dépôt.", "ok");
+      setStatusConfig( "monitoring.json copié : tu peux le coller à la main dans le dépôt.", "ok");
     } catch (e) {
-      setStatut(statutConfig, "Copie impossible depuis ce navigateur.", "error");
+      setStatusConfig( "Copie impossible depuis ce navigateur.", "error");
     }
   });
 
@@ -1826,7 +1836,7 @@
   async function ouvrirConfig() {
     showConfigView();
     hideHighlight();
-    setStatut(statutConfig, "Lecture de " + MONITORING_PATH + "…");
+    setStatusConfig( "Lecture de " + MONITORING_PATH + "…");
     try {
       const { texte, sha } = await lireFichierAvecSha(MONITORING_PATH);
       configMonitoring = JSON.parse(texte);
@@ -1834,12 +1844,12 @@
       if (!Array.isArray(configMonitoring.scripts)) configMonitoring.scripts = [];
       renderListeConfig();
       validerFormulaire(true);
-      setStatut(statutConfig,
+      setStatusConfig(
         `${configMonitoring.scripts.length} script(s) déclaré(s).`
         + (getToken() ? "" : " Aucun token enregistré : l'enregistrement direct sera impossible, mais tu peux copier le fichier."),
         getToken() ? "ok" : "warn");
     } catch (err) {
-      setStatut(statutConfig, "Erreur : " + err.message, "error");
+      setStatusConfig( "Erreur : " + err.message, "error");
     }
   }
 
