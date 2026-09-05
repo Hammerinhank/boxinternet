@@ -144,6 +144,52 @@
   }
   .token-status.set .led { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 
+  /* ---- Bandeau d'alerte : plus aucun relevé depuis trop longtemps ---- */
+  #alert-box {
+    display: none;
+    width: 100%;
+    max-width: 860px;
+    margin-bottom: 22px;
+    padding: 18px 22px;
+    border: 5px solid #ffffff;
+    border-radius: 8px;
+    color: #ffffff;
+    text-align: center;
+    background: #b35c00;
+  }
+  #alert-box.show { display: block; }
+  #alert-box .alert-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1.35;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+    margin-bottom: 10px;
+  }
+  #alert-box .alert-body {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  }
+  #alert-box .alert-sub {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.92;
+  }
+  /* Au-delà de 3 jours : clignotement pour rendre l'alerte impossible à manquer */
+  #alert-box.critical { animation: alert-pulse 1.1s ease-in-out infinite; }
+  @keyframes alert-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,0,0.9), 0 0 26px rgba(255,0,0,0.85); }
+    50%      { box-shadow: 0 0 0 14px rgba(255,0,0,0), 0 0 52px rgba(255,0,0,1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #alert-box.critical { animation: none; }
+  }
+
   /* ---- Encadré « dernier relevé » sous la ligne de boutons ---- */
   .highlight-box {
     display: none;
@@ -298,6 +344,11 @@
     <div class="version" id="version-badge">v1.0.0</div>
   </div>
 
+  <div id="alert-box">
+    <div class="alert-title" id="alert-title"></div>
+    <div class="alert-body" id="alert-body"></div>
+  </div>
+
   <div class="card">
     <div class="meta-line">
       <span>fichier&nbsp;: <b>activity.json</b></span>
@@ -348,7 +399,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.4.0";
+  const APP_VERSION = "1.5.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
@@ -364,6 +415,9 @@
   const tokenStatusText = document.getElementById("token-status-text");
   const highlightBox = document.getElementById("highlight-box");
   const highlightText = document.getElementById("highlight-text");
+  const alertBox = document.getElementById("alert-box");
+  const alertTitle = document.getElementById("alert-title");
+  const alertBody = document.getElementById("alert-body");
 
   const overlay = document.getElementById("overlay");
   const tokenInput = document.getElementById("token-input");
@@ -402,6 +456,110 @@
     highlightText.textContent = text;
     highlightText.className = "highlight-text" + (state ? " " + state : "");
     highlightBox.classList.add("show");
+  }
+
+  // ---- Alerte « aucun relevé depuis trop longtemps » ----
+  // Seuil de déclenchement : 2 h. La couleur vire progressivement du jaune-ambre
+  // (2 h) à l'orange (24 h) puis au rouge vif (3 jours et plus).
+  const ALERT_MIN_HOURS = 2;
+  let lastRecordDate = null; // Date du relevé le plus récent trouvé dans activity.json
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // Renvoie la teinte / luminosité de l'alerte en fonction de l'ancienneté (en heures)
+  function alertPalette(hours) {
+    const stops = [
+      { t: 2,   hue: 48, light: 42 },  // 2 h    → jaune-ambre
+      { t: 24,  hue: 26, light: 41 },  // 24 h   → orange
+      { t: 72,  hue: 8,  light: 43 },  // 3 j    → rouge-orangé
+      { t: 240, hue: 0,  light: 50 }   // 10 j+  → rouge vif saturé
+    ];
+    const first = stops[0], last = stops[stops.length - 1];
+    if (hours <= first.t) return { hue: first.hue, light: first.light };
+    if (hours >= last.t) return { hue: last.hue, light: last.light };
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i], b = stops[i + 1];
+      if (hours >= a.t && hours <= b.t) {
+        // progression logarithmique : la couleur bouge vite au début, puis se stabilise
+        const f = (Math.log(hours) - Math.log(a.t)) / (Math.log(b.t) - Math.log(a.t));
+        return { hue: lerp(a.hue, b.hue, f), light: lerp(a.light, b.light, f) };
+      }
+    }
+    return { hue: last.hue, light: last.light };
+  }
+
+  function formatDuration(ms) {
+    const totalMin = Math.floor(ms / 60000);
+    const jours = Math.floor(totalMin / 1440);
+    const heures = Math.floor((totalMin % 1440) / 60);
+    const minutes = totalMin % 60;
+    const parts = [];
+    if (jours > 0) parts.push(jours + (jours > 1 ? " jours" : " jour"));
+    if (heures > 0) parts.push(heures + " h");
+    if (jours === 0 && minutes > 0) parts.push(minutes + " min");
+    return parts.length ? parts.join(" ") : "moins d'une minute";
+  }
+
+  function hideAlert() {
+    alertBox.classList.remove("show", "critical");
+    alertBox.removeAttribute("style");
+    alertTitle.textContent = "";
+    alertBody.textContent = "";
+  }
+
+  function updateAlert() {
+    if (!lastRecordDate) { hideAlert(); return; }
+
+    const ms = Date.now() - lastRecordDate.getTime();
+    const hours = ms / 3600000;
+    if (hours < ALERT_MIN_HOURS) { hideAlert(); return; }
+
+    const { hue, light } = alertPalette(hours);
+    const h = hue.toFixed(0);
+    alertBox.style.background = `hsl(${h}, 100%, ${light.toFixed(0)}%)`;
+    alertBox.style.borderColor = `hsl(${h}, 100%, 88%)`;
+    if (hours < 72) {
+      alertBox.style.boxShadow = `0 0 28px hsla(${h}, 100%, 50%, 0.75)`;
+    } else {
+      alertBox.style.boxShadow = ""; // laissé à l'animation de clignotement
+    }
+
+    let niveau;
+    if (hours >= 72) niveau = "critique";
+    else if (hours >= 24) niveau = "grave";
+    else niveau = "anomalie";
+
+    alertTitle.textContent = `⚠ Alerte ${niveau} — aucun relevé depuis ${formatDuration(ms)} ⚠`;
+
+    alertBody.textContent = `Dernier relevé reçu ${formatDateFr(lastRecordDate)}.`;
+    const sub = document.createElement("span");
+    sub.className = "alert-sub";
+    sub.textContent = hours >= 72
+      ? "Plus rien ne remonte depuis plusieurs jours : la box, la machine de surveillance ou le script est très probablement à l'arrêt."
+      : "Le script de surveillance ne semble plus écrire dans activity.json — vérifiez la box et la machine qui l'exécute.";
+    alertBody.appendChild(sub);
+
+    alertBox.classList.toggle("critical", hours >= 72);
+    alertBox.classList.add("show");
+  }
+
+  // Extrait la date la plus récente parmi tous les enregistrements
+  function computeLastRecordDate(records) {
+    let best = null;
+    for (const rec of records) {
+      const d = extractDate(rec);
+      if (d && (!best || d > best)) best = d;
+    }
+    return best;
+  }
+
+  // Retrouve le tableau d'enregistrements quel que soit l'emballage du JSON
+  function extractRecords(parsed) {
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.records)) return parsed.records;
+    if (parsed && Array.isArray(parsed.entries)) return parsed.entries;
+    if (parsed && Array.isArray(parsed.activities)) return parsed.activities;
+    return null;
   }
 
   // ---- Modale token ----
@@ -502,6 +660,15 @@
     try {
       const decoded = await fetchRawFile();
       output.value = prettyPrintIfJson(decoded);
+
+      // L'alerte reste à jour même quand on consulte le journal brut
+      try {
+        const records = extractRecords(JSON.parse(decoded));
+        if (records && records.length) {
+          lastRecordDate = computeLastRecordDate(records);
+          updateAlert();
+        }
+      } catch (e) { /* pas du JSON exploitable : on garde l'alerte précédente */ }
 
       const now = new Date();
       lastFetchEl.textContent = now.toLocaleString("fr-FR");
@@ -667,11 +834,7 @@
         throw new Error("Le fichier ne contient pas du JSON valide, impossible de le résumer.");
       }
 
-      const records = Array.isArray(parsed) ? parsed
-        : Array.isArray(parsed.records) ? parsed.records
-        : Array.isArray(parsed.entries) ? parsed.entries
-        : Array.isArray(parsed.activities) ? parsed.activities
-        : null;
+      const records = extractRecords(parsed);
 
       if (!records) {
         throw new Error("Format inattendu : impossible de trouver un tableau d'enregistrements dans le JSON.");
@@ -679,8 +842,14 @@
       if (records.length === 0) {
         outputSummary.innerHTML = '<div class="empty">Aucun enregistrement dans le fichier.</div>';
         setStatus("Lecture réussie, mais le journal est vide.", "ok");
+        lastRecordDate = null;
+        hideAlert();
         return;
       }
+
+      // Alerte si le relevé le plus récent est trop ancien
+      lastRecordDate = computeLastRecordDate(records);
+      updateAlert();
 
       // Lignes affichées du plus récent au plus ancien ; la première ligne (la plus récente) est mise en avant
       const rows = buildSummaryRows(records);
@@ -711,6 +880,8 @@
   // init
   refreshTokenBadge();
   fetchSummary();
+  // L'ancienneté (et donc la couleur de l'alerte) est recalculée en continu
+  setInterval(updateAlert, 30000);
 </script>
 </body>
 </html>
