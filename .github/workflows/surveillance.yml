@@ -1,0 +1,21 @@
+# .github/workflows/surveillance.yml
+# Contrôle quotidien de TOUS les scripts listés dans monitoring.json.
+# Si l'un d'eux est muet ou en erreur, le job échoue et GitHub envoie un mail.
+# Version 2.0.0 (remplace surveillance-box.yml, qui peut être supprimé)
+
+name: ALERTE scripts Mac
+
+on:
+  schedule:
+    # 04:00 UTC = 6 h à Paris en été, 5 h en hiver (GitHub ne connaît que l'UTC)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  controle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Contrôler tous les scripts surveillés
+        run: python3 verifier_monitoring.py

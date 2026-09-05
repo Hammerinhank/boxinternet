@@ -1,0 +1,23 @@
+{
+  "version": "1.1.0",
+  "_mode_d_emploi": "Pour surveiller un nouveau script : copier le bloc modele ci-dessous dans 'scripts', changer 'id' (sans espace ni accent), 'nom' (libelle lisible dans l'alerte) et 'seuil_heures'. Rien d'autre a modifier nulle part. Le script concerne doit appeler heartbeat.py avec le meme 'id'.",
+
+  "_bloc_modele": {
+    "id": "mon-script",
+    "nom": "Libelle lisible du script",
+    "type": "heartbeat",
+    "seuil_heures": 26,
+    "actif": true
+  },
+
+  "scripts": [
+    {
+      "id": "boxinternet",
+      "nom": "Surveillance de la box internet",
+      "type": "journal",
+      "fichier": "activity.json",
+      "seuil_heures": 24,
+      "actif": true
+    }
+  ]
+}
