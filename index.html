@@ -270,6 +270,109 @@
   #output-summary .row.unknown { color: #eef4f0; text-shadow: 0 0 6px rgba(238,244,240,0.3); }
   /* Ligne la plus récente (première affichée) en gras */
   #output-summary .row.last { font-weight: 700; }
+  /* ---- Vue « Configurer » : ajout / suppression de scripts surveillés ---- */
+  #config-view { display: none; }
+  #config-view.show { display: block; }
+
+  .pedago {
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--accent-dim);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+  .pedago h4 {
+    margin: 0 0 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .pedago ol { margin: 0; padding-left: 20px; }
+  .pedago li { margin-bottom: 6px; }
+  .pedago b { color: var(--text); font-weight: 600; }
+  .pedago code {
+    background: #131a17;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+
+  .champ { margin-bottom: 14px; }
+  .champ label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .champ .aide {
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .champ input[type="text"], .champ input[type="number"], .champ select {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: #0a0f0d;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 9px 10px;
+  }
+  .champ input:focus, .champ select:focus { outline: none; border-color: var(--accent-dim); }
+  .champ.invalide input, .champ.invalide select { border-color: var(--err); }
+  .champ.valide input, .champ.valide select { border-color: var(--accent-dim); }
+  .champ .verdict { font-size: 0.75rem; margin-top: 5px; line-height: 1.45; min-height: 14px; }
+  .champ .verdict.ko { color: var(--err); }
+  .champ .verdict.ok { color: var(--accent); }
+  .champ .case { display: flex; align-items: center; gap: 8px; }
+  .champ .case input { width: 17px; height: 17px; accent-color: #4fd980; }
+
+  .apercu {
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .ligne-script {
+    display: flex; align-items: center; gap: 10px;
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 11px 13px;
+    margin-bottom: 9px;
+    font-size: 0.82rem;
+  }
+  .ligne-script .txt { flex: 1; min-width: 0; }
+  .ligne-script .txt .id { color: var(--text-dim); font-size: 0.74rem; }
+  .ligne-script button { padding: 6px 11px; font-size: 0.78rem; }
+
+  .section-titre {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 22px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+    font-weight: 600;
+  }
+
   #output-summary .empty {
     color: var(--text-dim);
   }
@@ -458,6 +561,7 @@
       <button id="btn-summary">≣ Résumé</button>
       <button id="btn-journal">▶ Journal</button>
       <button id="btn-scripts">⌗ Scripts<span class="btn-badge" id="scripts-badge"></span></button>
+      <button id="btn-config">⚙ Configurer</button>
       <button id="btn-token">🔑 Token</button>
       <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
     </div>
@@ -473,6 +577,86 @@
     <div id="output-summary"></div>
     <div id="scripts-view"></div>
     <div id="script-detail"></div>
+
+    <div id="config-view">
+
+      <div class="pedago">
+        <h4>Comment fonctionne la surveillance</h4>
+        <ol>
+          <li>Tu <b>déclares</b> ici le script à surveiller. Cela ajoute quelques lignes dans <code>monitoring.json</code>, la liste de référence.</li>
+          <li>Le script, sur le Mac, <b>signale qu'il a tourné</b> en appelant <code>heartbeat.py</code> avec son identifiant. Il dépose ainsi son horodatage dans le dépôt.</li>
+          <li>Chaque matin vers 6 h, un <b>contrôle automatique</b> compare l'heure du dernier signal au seuil que tu fixes. Si le script est muet, tu reçois un mail le nommant.</li>
+        </ol>
+      </div>
+
+      <h3 class="section-titre">Ajouter un script</h3>
+
+      <div class="champ" id="ch-id">
+        <label for="cfg-id">Identifiant</label>
+        <div class="aide">Le nom technique, celui que le script passera à <code>heartbeat.py</code>. Lettres minuscules, chiffres et tirets uniquement — ni espace, ni accent, ni majuscule.</div>
+        <input type="text" id="cfg-id" placeholder="sauvegarde-photos" autocomplete="off" spellcheck="false">
+        <div class="verdict" id="v-id"></div>
+      </div>
+
+      <div class="champ" id="ch-nom">
+        <label for="cfg-nom">Libellé lisible</label>
+        <div class="aide">Le nom qui apparaîtra dans l'alerte et dans la liste. Écris-le comme tu le dirais : c'est ce que tu liras dans le mail, un matin, à moitié réveillé.</div>
+        <input type="text" id="cfg-nom" placeholder="Sauvegarde de la photothèque" autocomplete="off">
+        <div class="verdict" id="v-nom"></div>
+      </div>
+
+      <div class="champ" id="ch-type">
+        <label for="cfg-type">Mode de suivi</label>
+        <div class="aide">« Battement de cœur » convient à presque tout : le script appelle <code>heartbeat.py</code> et son fichier de suivi est créé tout seul. « Journal existant » sert quand le script écrit déjà lui-même un fichier daté dans le dépôt, comme la box avec <code>activity.json</code>.</div>
+        <select id="cfg-type">
+          <option value="heartbeat">Battement de cœur (heartbeat.py)</option>
+          <option value="journal">Journal existant déjà dans le dépôt</option>
+        </select>
+        <div class="verdict" id="v-type"></div>
+      </div>
+
+      <div class="champ" id="ch-fichier" style="display:none">
+        <label for="cfg-fichier">Fichier journal</label>
+        <div class="aide">Chemin du fichier dans le dépôt, tel qu'il apparaît sur GitHub.</div>
+        <input type="text" id="cfg-fichier" placeholder="activity.json" autocomplete="off" spellcheck="false">
+        <div class="verdict" id="v-fichier"></div>
+      </div>
+
+      <div class="champ" id="ch-seuil">
+        <label for="cfg-seuil">Seuil d'alerte, en heures</label>
+        <div class="aide">Au-delà de ce silence, le script est considéré à l'arrêt. Prends un peu de marge sur sa fréquence réelle : 26 h pour un script quotidien, 2 h pour un script horaire. Trop serré, tu recevras de fausses alertes ; trop large, tu découvriras la panne tard.</div>
+        <input type="number" id="cfg-seuil" value="26" min="1" step="1">
+        <div class="verdict" id="v-seuil"></div>
+      </div>
+
+      <div class="champ" id="ch-actif">
+        <label>Surveillance active</label>
+        <div class="case">
+          <input type="checkbox" id="cfg-actif" checked>
+          <span class="aide" style="margin:0">Décoche pour déclarer le script sans le surveiller encore — utile le temps de le mettre en place.</span>
+        </div>
+      </div>
+
+      <h3 class="section-titre">Ce qui va être ajouté</h3>
+      <div class="apercu" id="apercu-json">Remplis le formulaire ci-dessus…</div>
+      <div id="zone-commande" style="display:none">
+        <div class="aide" style="font-size:0.76rem; color:var(--text-dim); margin-bottom:6px">
+          Et la ligne à ajouter à la fin de ton script, sur le Mac :
+        </div>
+        <div class="apercu" id="apercu-commande"></div>
+      </div>
+
+      <div class="row-btns">
+        <button id="btn-valider">🧪 Vérifier</button>
+        <button class="primary" id="btn-ajouter">＋ Ajouter et enregistrer</button>
+        <button id="btn-copier-json">📋 Copier monitoring.json</button>
+      </div>
+      <div class="status" id="statut-config"></div>
+
+      <h3 class="section-titre">Scripts déjà déclarés</h3>
+      <div id="liste-config"></div>
+
+    </div>
   </div>
 
   <footer>boxinternet journal viewer</footer>
@@ -499,7 +683,7 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.6.0";
+  const APP_VERSION = "1.7.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
 
   // Fichiers de la surveillance multi-scripts
@@ -755,25 +939,36 @@
     outputSummary.classList.remove("show");
     scriptsView.classList.remove("show");
     scriptDetail.classList.remove("show");
+    document.getElementById("config-view").classList.remove("show");
     output.style.display = "";
   }
   function showSummaryView() {
     output.style.display = "none";
     scriptsView.classList.remove("show");
     scriptDetail.classList.remove("show");
+    document.getElementById("config-view").classList.remove("show");
     outputSummary.classList.add("show");
   }
   function showScriptsView() {
     output.style.display = "none";
     outputSummary.classList.remove("show");
     scriptDetail.classList.remove("show");
+    document.getElementById("config-view").classList.remove("show");
     scriptsView.classList.add("show");
   }
   function showDetailView() {
     output.style.display = "none";
     outputSummary.classList.remove("show");
     scriptsView.classList.remove("show");
+    document.getElementById("config-view").classList.remove("show");
     scriptDetail.classList.add("show");
+  }
+  function showConfigView() {
+    output.style.display = "none";
+    outputSummary.classList.remove("show");
+    scriptsView.classList.remove("show");
+    scriptDetail.classList.remove("show");
+    document.getElementById("config-view").classList.add("show");
   }
 
   async function fetchJournal() {
@@ -1303,6 +1498,352 @@
   }
 
   btnScripts.addEventListener("click", fetchScripts);
+
+  // =========================================================================
+  //  Vue « Configurer » — déclarer et retirer des scripts surveillés (v1.7.0)
+  //  Lit et réécrit monitoring.json via l'API GitHub.
+  // =========================================================================
+
+  const configView = $("config-view");
+  const statutConfig = $("statut-config");
+  let configMonitoring = null;  // objet JSON complet
+  let shaMonitoring = null;     // sha du fichier, requis pour l'écrire
+
+  function utf8ToBase64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let binaire = "";
+    for (const b of bytes) binaire += String.fromCharCode(b);
+    return btoa(binaire);
+  }
+
+  // Lit un fichier du dépôt en récupérant aussi son sha
+  async function lireFichierAvecSha(path) {
+    const token = getToken();
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encoded}?ref=${BRANCH}`;
+    const headers = { "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+
+    const res = await fetch(url, { headers });
+    if (res.status === 404) throw new Error(`${path} est absent du dépôt.`);
+    if (!res.ok) throw new Error("Lecture impossible : HTTP " + res.status);
+    const data = await res.json();
+    return { texte: base64ToUtf8(data.content), sha: data.sha };
+  }
+
+  // Réécrit un fichier du dépôt
+  async function ecrireFichier(path, texte, sha, message) {
+    const token = getToken();
+    if (!token) throw new Error("Aucun token enregistré : l'écriture sur GitHub est impossible. Utilisez le bouton « Copier monitoring.json » et déposez le fichier à la main.");
+
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encoded}`;
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ message, content: utf8ToBase64(texte), sha, branch: BRANCH })
+    });
+
+    if (res.status === 401) throw new Error("Token invalide ou expiré (401).");
+    if (res.status === 403) throw new Error("Écriture refusée (403) : le token n'a pas la permission « Contents : Read and write » sur ce dépôt.");
+    if (res.status === 409) throw new Error("Conflit (409) : le fichier a changé entre-temps. Rouvrez la page pour repartir de la version à jour.");
+    if (!res.ok) {
+      let detail = "";
+      try { detail = " — " + (await res.json()).message; } catch (e) {}
+      throw new Error("Écriture impossible : HTTP " + res.status + detail);
+    }
+    const data = await res.json();
+    return data.content && data.content.sha;
+  }
+
+  // ---- Validation du formulaire ----
+  const RE_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+  function valeursFormulaire() {
+    return {
+      id: $("cfg-id").value.trim(),
+      nom: $("cfg-nom").value.trim(),
+      type: $("cfg-type").value,
+      fichier: $("cfg-fichier").value.trim(),
+      seuil: $("cfg-seuil").value.trim(),
+      actif: $("cfg-actif").checked
+    };
+  }
+
+  function verdict(champId, verdictId, texte, ok) {
+    const bloc = $(champId);
+    const v = $(verdictId);
+    v.textContent = texte || "";
+    v.className = "verdict" + (texte ? (ok ? " ok" : " ko") : "");
+    bloc.className = "champ" + (texte ? (ok ? " valide" : " invalide") : "");
+    return ok;
+  }
+
+  function validerFormulaire(silencieux) {
+    const v = valeursFormulaire();
+    const dejaPris = (configMonitoring && configMonitoring.scripts || []).some(s => s.id === v.id);
+    let tout = true;
+
+    // Identifiant
+    if (!v.id) {
+      tout = verdict("ch-id", "v-id", silencieux ? "" : "L'identifiant est obligatoire.", false) && tout;
+      if (!silencieux) tout = false;
+      else { $("ch-id").className = "champ"; $("v-id").textContent = ""; tout = false; }
+    } else if (!RE_ID.test(v.id)) {
+      tout = verdict("ch-id", "v-id", "Caractères non autorisés. Attendu : minuscules, chiffres et tirets, par exemple « sauvegarde-photos ».", false) && tout;
+      tout = false;
+    } else if (dejaPris) {
+      tout = verdict("ch-id", "v-id", `« ${v.id} » est déjà déclaré plus bas. Choisis un autre identifiant, ou supprime l'existant d'abord.`, false) && tout;
+      tout = false;
+    } else {
+      verdict("ch-id", "v-id", "Identifiant valide et disponible.", true);
+    }
+
+    // Libellé
+    if (!v.nom) {
+      if (silencieux) { $("ch-nom").className = "champ"; $("v-nom").textContent = ""; }
+      else verdict("ch-nom", "v-nom", "Le libellé est obligatoire : c'est lui qui apparaîtra dans le mail d'alerte.", false);
+      tout = false;
+    } else if (v.nom.length < 3) {
+      verdict("ch-nom", "v-nom", "Un peu court pour être reconnaissable dans une alerte.", false);
+      tout = false;
+    } else {
+      verdict("ch-nom", "v-nom", "Libellé correct.", true);
+    }
+
+    // Fichier journal, seulement en mode journal
+    if (v.type === "journal") {
+      if (!v.fichier) {
+        if (silencieux) { $("ch-fichier").className = "champ"; $("v-fichier").textContent = ""; }
+        else verdict("ch-fichier", "v-fichier", "Indique le chemin du fichier journal dans le dépôt.", false);
+        tout = false;
+      } else if (v.fichier.startsWith("/")) {
+        verdict("ch-fichier", "v-fichier", "Chemin relatif attendu, sans barre oblique initiale.", false);
+        tout = false;
+      } else {
+        verdict("ch-fichier", "v-fichier", "Chemin accepté. Il sera vérifié à l'enregistrement.", true);
+      }
+    } else {
+      $("ch-fichier").className = "champ";
+      $("v-fichier").textContent = "";
+    }
+
+    // Seuil
+    const seuil = Number(v.seuil);
+    if (!v.seuil || !isFinite(seuil) || seuil <= 0) {
+      verdict("ch-seuil", "v-seuil", "Indique un nombre d'heures supérieur à zéro.", false);
+      tout = false;
+    } else if (seuil < 2) {
+      verdict("ch-seuil", "v-seuil", "Seuil très serré : le contrôle n'ayant lieu qu'une fois par jour, une valeur sous 2 h n'apporte rien.", false);
+      tout = false;
+    } else if (seuil > 720) {
+      verdict("ch-seuil", "v-seuil", "Plus de 30 jours : une panne passerait inaperçue très longtemps.", false);
+      tout = false;
+    } else {
+      verdict("ch-seuil", "v-seuil", `Alerte si le script reste muet plus de ${seuil} h.`, true);
+    }
+
+    majApercu(v, tout);
+    return tout;
+  }
+
+  function entreeDepuisFormulaire(v) {
+    const e = { id: v.id, nom: v.nom, type: v.type };
+    if (v.type === "journal") e.fichier = v.fichier;
+    e.seuil_heures = Number(v.seuil);
+    e.actif = v.actif;
+    return e;
+  }
+
+  function majApercu(v, valide) {
+    const zone = $("apercu-json");
+    if (!v.id || !v.nom) {
+      zone.textContent = "Remplis le formulaire ci-dessus…";
+      $("zone-commande").style.display = "none";
+      return;
+    }
+    zone.textContent = JSON.stringify(entreeDepuisFormulaire(v), null, 2);
+
+    if (v.type === "heartbeat" && RE_ID.test(v.id)) {
+      $("apercu-commande").textContent = `python3 ~/boxinternet/heartbeat.py ${v.id}`;
+      $("zone-commande").style.display = "";
+    } else {
+      $("zone-commande").style.display = "none";
+    }
+  }
+
+  ["cfg-id", "cfg-nom", "cfg-fichier", "cfg-seuil"].forEach(id =>
+    $(id).addEventListener("input", () => validerFormulaire(true)));
+  $("cfg-actif").addEventListener("change", () => validerFormulaire(true));
+  $("cfg-type").addEventListener("change", () => {
+    $("ch-fichier").style.display = $("cfg-type").value === "journal" ? "" : "none";
+    validerFormulaire(true);
+  });
+
+  $("btn-valider").addEventListener("click", () => {
+    const ok = validerFormulaire(false);
+    setStatut(statutConfig,
+      ok ? "Tout est correct : tu peux enregistrer." : "Corrige les points signalés en rouge ci-dessus.",
+      ok ? "ok" : "error");
+  });
+
+  // ---- Enregistrement ----
+  function texteMonitoring() {
+    return JSON.stringify(configMonitoring, null, 2) + "\n";
+  }
+
+  async function enregistrerMonitoring(message) {
+    const nouveauSha = await ecrireFichier(MONITORING_PATH, texteMonitoring(), shaMonitoring, message);
+    if (nouveauSha) shaMonitoring = nouveauSha;
+  }
+
+  $("btn-ajouter").addEventListener("click", async () => {
+    if (!validerFormulaire(false)) {
+      setStatut(statutConfig, "Corrige les points signalés avant d'enregistrer.", "error");
+      return;
+    }
+    if (!configMonitoring) {
+      setStatut(statutConfig, "monitoring.json n'a pas pu être lu : recharge la page.", "error");
+      return;
+    }
+
+    const entree = entreeDepuisFormulaire(valeursFormulaire());
+    if (!confirm(`Ajouter « ${entree.nom} » à la surveillance et enregistrer monitoring.json sur GitHub ?`)) return;
+
+    if (!Array.isArray(configMonitoring.scripts)) configMonitoring.scripts = [];
+    configMonitoring.scripts.push(entree);
+
+    $("btn-ajouter").disabled = true;
+    setStatut(statutConfig, "Enregistrement sur GitHub…");
+    try {
+      await enregistrerMonitoring(`Surveillance : ajout de ${entree.id}`);
+      setStatut(statutConfig,
+        `« ${entree.nom} » est déclaré.`
+        + (entree.type === "heartbeat"
+            ? " Il reste à ajouter la ligne d'appel à heartbeat.py à la fin du script, sinon il sera signalé muet dès demain matin."
+            : ""),
+        "ok");
+      reinitialiserFormulaire();
+      renderListeConfig();
+      chargerScripts().catch(() => {});
+    } catch (err) {
+      configMonitoring.scripts.pop();   // on annule l'ajout local si l'écriture a échoué
+      setStatut(statutConfig, "Échec : " + err.message, "error");
+    } finally {
+      $("btn-ajouter").disabled = false;
+    }
+  });
+
+  function reinitialiserFormulaire() {
+    ["cfg-id", "cfg-nom", "cfg-fichier"].forEach(id => { $(id).value = ""; });
+    $("cfg-seuil").value = "26";
+    $("cfg-actif").checked = true;
+    $("cfg-type").value = "heartbeat";
+    $("ch-fichier").style.display = "none";
+    ["ch-id", "ch-nom", "ch-type", "ch-fichier", "ch-seuil"].forEach(id => $(id).className = "champ");
+    ["v-id", "v-nom", "v-type", "v-fichier", "v-seuil"].forEach(id => $(id).textContent = "");
+    $("apercu-json").textContent = "Remplis le formulaire ci-dessus…";
+    $("zone-commande").style.display = "none";
+  }
+
+  // ---- Liste des scripts déclarés, avec suppression ----
+  function renderListeConfig() {
+    const zone = $("liste-config");
+    zone.innerHTML = "";
+    const liste = (configMonitoring && configMonitoring.scripts) || [];
+
+    if (liste.length === 0) {
+      zone.innerHTML = '<div class="empty" style="color:var(--text-dim);font-size:0.85rem">Aucun script déclaré pour l\'instant.</div>';
+      return;
+    }
+
+    liste.forEach(s => {
+      const ligne = document.createElement("div");
+      ligne.className = "ligne-script";
+
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      const nom = document.createElement("div");
+      nom.textContent = (s.nom || s.id) + (s.actif === false ? "  (surveillance suspendue)" : "");
+      const id = document.createElement("div");
+      id.className = "id";
+      id.textContent = `${s.id} · ${s.type === "journal" ? "journal " + (s.fichier || "") : "heartbeat"} · seuil ${s.seuil_heures || 26} h`;
+      txt.appendChild(nom);
+      txt.appendChild(id);
+
+      const suppr = document.createElement("button");
+      suppr.className = "danger";
+      suppr.textContent = "Supprimer";
+      suppr.addEventListener("click", () => supprimerEntree(s.id));
+
+      ligne.appendChild(txt);
+      ligne.appendChild(suppr);
+      zone.appendChild(ligne);
+    });
+  }
+
+  async function supprimerEntree(id) {
+    const liste = (configMonitoring && configMonitoring.scripts) || [];
+    const index = liste.findIndex(s => s.id === id);
+    if (index < 0) return;
+    const entree = liste[index];
+
+    if (!confirm(`Retirer « ${entree.nom || entree.id} » de la surveillance ?\n\n`
+      + "Le script continuera de tourner : seule l'alerte disparaît. "
+      + "Son fichier de suivi, lui, reste dans le dépôt.")) return;
+
+    liste.splice(index, 1);
+    setStatut(statutConfig, "Enregistrement sur GitHub…");
+    try {
+      await enregistrerMonitoring(`Surveillance : retrait de ${id}`);
+      setStatut(statutConfig, `« ${entree.nom || id} » n'est plus surveillé.`, "ok");
+      renderListeConfig();
+      validerFormulaire(true);   // l'identifiant redevient disponible
+      chargerScripts().catch(() => {});
+    } catch (err) {
+      liste.splice(index, 0, entree);   // on remet l'entrée si l'écriture a échoué
+      setStatut(statutConfig, "Échec : " + err.message, "error");
+      renderListeConfig();
+    }
+  }
+
+  $("btn-copier-json").addEventListener("click", async () => {
+    if (!configMonitoring) return;
+    try {
+      await navigator.clipboard.writeText(texteMonitoring());
+      setStatut(statutConfig, "monitoring.json copié : tu peux le coller à la main dans le dépôt.", "ok");
+    } catch (e) {
+      setStatut(statutConfig, "Copie impossible depuis ce navigateur.", "error");
+    }
+  });
+
+  // ---- Bouton « Configurer » ----
+  async function ouvrirConfig() {
+    showConfigView();
+    hideHighlight();
+    setStatut(statutConfig, "Lecture de " + MONITORING_PATH + "…");
+    try {
+      const { texte, sha } = await lireFichierAvecSha(MONITORING_PATH);
+      configMonitoring = JSON.parse(texte);
+      shaMonitoring = sha;
+      if (!Array.isArray(configMonitoring.scripts)) configMonitoring.scripts = [];
+      renderListeConfig();
+      validerFormulaire(true);
+      setStatut(statutConfig,
+        `${configMonitoring.scripts.length} script(s) déclaré(s).`
+        + (getToken() ? "" : " Aucun token enregistré : l'enregistrement direct sera impossible, mais tu peux copier le fichier."),
+        getToken() ? "ok" : "warn");
+    } catch (err) {
+      setStatut(statutConfig, "Erreur : " + err.message, "error");
+    }
+  }
+
+  $("btn-config").addEventListener("click", ouvrirConfig);
 
   // init
   refreshTokenBadge();
