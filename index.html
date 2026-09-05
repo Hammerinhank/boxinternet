@@ -274,6 +274,103 @@
     color: var(--text-dim);
   }
 
+  /* ---- Vue « Scripts » : tableau de bord + fiche détaillée ---- */
+  #scripts-view, #script-detail { display: none; }
+  #scripts-view.show, #script-detail.show { display: block; }
+
+  .script-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-left-width: 6px;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    font-family: var(--mono);
+    color: var(--text);
+  }
+  .script-card:hover { border-color: var(--accent-dim); border-left-color: inherit; }
+  .script-card .pastille {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+  .script-card .infos { flex: 1; min-width: 0; }
+  .script-card .nom { font-size: 0.95rem; font-weight: 700; margin-bottom: 3px; }
+  .script-card .etat { font-size: 0.8rem; line-height: 1.4; }
+  .script-card .chevron { color: var(--text-dim); font-size: 1.1rem; }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .detail-header h2 {
+    font-size: 1rem;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .detail-banner {
+    border: 3px solid #fff;
+    border-radius: 8px;
+    padding: 14px 18px;
+    color: #fff;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.4;
+    margin-bottom: 16px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .detail-banner .sous { display: block; margin-top: 6px; font-size: 0.8rem; font-weight: 500; opacity: 0.92; }
+  .detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 14px;
+  }
+  .detail-meta b { color: var(--text); font-weight: 500; }
+  .detail-histo {
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    max-height: 50vh;
+    overflow: auto;
+    font-size: 0.85rem;
+    line-height: 1.9;
+  }
+  .detail-histo .row { padding: 2px 0; white-space: pre-wrap; }
+  .detail-histo .row.ok { color: #8dffb0; text-shadow: 0 0 8px rgba(141,255,176,0.5); }
+  .detail-histo .row.bad { color: #ff9a9a; text-shadow: 0 0 8px rgba(255,154,154,0.5); }
+  .detail-histo .row.unknown { color: #eef4f0; text-shadow: 0 0 6px rgba(238,244,240,0.3); }
+  .detail-histo .row.last { font-weight: 700; }
+
+  /* Compteur rouge sur le bouton Scripts quand un script est en défaut */
+  .btn-badge {
+    display: none;
+    margin-left: 7px;
+    background: #e01b1b;
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    box-shadow: 0 0 10px rgba(224,27,27,0.9);
+  }
+  .btn-badge.show { display: inline-block; }
+
   footer {
     max-width: 860px;
     width: 100%;
@@ -360,6 +457,7 @@
     <div class="controls">
       <button id="btn-summary">≣ Résumé</button>
       <button id="btn-journal">▶ Journal</button>
+      <button id="btn-scripts">⌗ Scripts<span class="btn-badge" id="scripts-badge"></span></button>
       <button id="btn-token">🔑 Token</button>
       <span class="token-status" id="token-status"><span class="led"></span><span id="token-status-text">token non défini</span></span>
     </div>
@@ -373,6 +471,8 @@
 
     <textarea id="output" readonly placeholder="Le contenu de activity.json apparaîtra ici après un clic sur « Journal »…"></textarea>
     <div id="output-summary"></div>
+    <div id="scripts-view"></div>
+    <div id="script-detail"></div>
   </div>
 
   <footer>boxinternet journal viewer</footer>
@@ -399,13 +499,21 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.5.0";
+  const APP_VERSION = "1.6.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
+
+  // Fichiers de la surveillance multi-scripts
+  const MONITORING_PATH = "monitoring.json";
+  const HEARTBEAT_DIR = "heartbeats";
 
   const STORAGE_KEY = "boxinternet_journal_gh_token";
 
   const btnJournal = document.getElementById("btn-journal");
   const btnSummary = document.getElementById("btn-summary");
+  const btnScripts = document.getElementById("btn-scripts");
+  const scriptsBadge = document.getElementById("scripts-badge");
+  const scriptsView = document.getElementById("scripts-view");
+  const scriptDetail = document.getElementById("script-detail");
   const btnToken = document.getElementById("btn-token");
   const output = document.getElementById("output");
   const outputSummary = document.getElementById("output-summary");
@@ -607,9 +715,11 @@
     }
   }
 
-  async function fetchRawFile() {
+  async function fetchRawFile(path = FILE_PATH, options = {}) {
     const token = getToken();
-    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(FILE_PATH)}?ref=${BRANCH}`;
+    // chaque segment est encodé séparément pour préserver les « / » du chemin
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encoded}?ref=${BRANCH}`;
 
     const headers = {
       "Accept": "application/vnd.github+json",
@@ -620,6 +730,7 @@
     const res = await fetch(url, { headers });
 
     if (res.status === 404) {
+      if (options.tolerant) return null; // fichier absent : cas normal pour un heartbeat jamais écrit
       throw new Error("Fichier ou dépôt introuvable (404). Vérifiez le nom du fichier, ou que le token a accès au dépôt s'il est privé.");
     }
     if (res.status === 401) {
@@ -642,11 +753,27 @@
 
   function showTextView() {
     outputSummary.classList.remove("show");
+    scriptsView.classList.remove("show");
+    scriptDetail.classList.remove("show");
     output.style.display = "";
   }
   function showSummaryView() {
     output.style.display = "none";
+    scriptsView.classList.remove("show");
+    scriptDetail.classList.remove("show");
     outputSummary.classList.add("show");
+  }
+  function showScriptsView() {
+    output.style.display = "none";
+    outputSummary.classList.remove("show");
+    scriptDetail.classList.remove("show");
+    scriptsView.classList.add("show");
+  }
+  function showDetailView() {
+    output.style.display = "none";
+    outputSummary.classList.remove("show");
+    scriptsView.classList.remove("show");
+    scriptDetail.classList.add("show");
   }
 
   async function fetchJournal() {
@@ -700,7 +827,7 @@
 
   // Essaie de trouver une date exploitable dans plusieurs formats de champs courants
   function extractDate(rec) {
-    const candidates = [rec.heure, rec.date, rec.timestamp, rec.time, rec.ts, rec.datetime, rec.created_at, rec.recorded_at, rec.date_heure];
+    const candidates = [rec.derniere_execution, rec.heure, rec.date, rec.timestamp, rec.time, rec.ts, rec.datetime, rec.created_at, rec.recorded_at, rec.date_heure];
     for (const c of candidates) {
       if (c === undefined || c === null) continue;
       // timestamp numérique (secondes ou millisecondes)
@@ -877,9 +1004,311 @@
 
   btnSummary.addEventListener("click", fetchSummary);
 
+  // =========================================================================
+  //  Vue « Scripts » — un état clair par script surveillé (v1.6.0)
+  //  Source : monitoring.json + heartbeats/<id>.json (ou le fichier journal
+  //  indiqué dans la configuration). N'altère en rien les vues existantes.
+  // =========================================================================
+
+  let scriptsCache = null; // [{conf, records, etat}] du dernier chargement
+
+  // Couleur d'un retard, exprimée en multiples du seuil : ambre au seuil,
+  // orange à 2 fois le seuil, rouge vif à 8 fois — même logique que le bandeau.
+  function paletteRetard(ratio) {
+    const stops = [
+      { t: 1, hue: 48, light: 42 },
+      { t: 2, hue: 30, light: 41 },
+      { t: 4, hue: 12, light: 43 },
+      { t: 8, hue: 0,  light: 48 }
+    ];
+    if (ratio <= stops[0].t) return stops[0];
+    const last = stops[stops.length - 1];
+    if (ratio >= last.t) return last;
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i], b = stops[i + 1];
+      if (ratio >= a.t && ratio <= b.t) {
+        const f = (Math.log(ratio) - Math.log(a.t)) / (Math.log(b.t) - Math.log(a.t));
+        return { hue: lerp(a.hue, b.hue, f), light: lerp(a.light, b.light, f) };
+      }
+    }
+    return last;
+  }
+
+  function couleurEtat(res) {
+    if (res.etat === "ok") return { fond: "hsl(145, 65%, 30%)", bord: "hsl(145, 80%, 70%)" };
+    if (res.etat === "absent") return { fond: "hsl(0, 0%, 34%)", bord: "hsl(0, 0%, 78%)" };
+    if (res.etat === "erreur") return { fond: "hsl(348, 75%, 40%)", bord: "hsl(348, 100%, 82%)" };
+    const p = paletteRetard(res.ratio || 1);
+    const h = p.hue.toFixed(0);
+    return { fond: `hsl(${h}, 100%, ${p.light.toFixed(0)}%)`, bord: `hsl(${h}, 100%, 86%)` };
+  }
+
+  // Chemin du fichier de suivi d'un script
+  function fichierDuScript(conf) {
+    return conf.type === "journal"
+      ? (conf.fichier || FILE_PATH)
+      : `${HEARTBEAT_DIR}/${conf.id}.json`;
+  }
+
+  // Évalue l'état d'un script à partir de ses enregistrements
+  function etatScript(conf, records) {
+    const seuil = Number(conf.seuil_heures) > 0 ? Number(conf.seuil_heures) : 26;
+    const base = { conf, seuil, records: records || [] };
+
+    if (!records || records.length === 0) {
+      return { ...base, etat: "absent", resume: "aucun signe de vie — le script n'a jamais déposé d'information" };
+    }
+
+    const avecDate = records
+      .map(r => ({ rec: r, date: extractDate(r) }))
+      .filter(x => x.date)
+      .sort((a, b) => a.date - b.date);
+
+    if (avecDate.length === 0) {
+      return { ...base, etat: "absent", resume: "aucune date exploitable dans le fichier de suivi" };
+    }
+
+    const dernier = avecDate[avecDate.length - 1];
+    const heures = (Date.now() - dernier.date.getTime()) / 3600000;
+    const ratio = heures / seuil;
+    const quand = formatDateFr(dernier.date);
+    const statut = dernier.rec && dernier.rec.statut;
+    const message = (dernier.rec && dernier.rec.message) || "";
+
+    if (heures > seuil) {
+      return { ...base, etat: "muet", heures, ratio, date: dernier.date, message,
+        resume: `silencieux depuis ${formatDuration(heures * 3600000)} — dernier signe ${quand}` };
+    }
+    if (statut === "erreur") {
+      return { ...base, etat: "erreur", heures, ratio, date: dernier.date, message,
+        resume: `a signalé une erreur ${quand}${message ? " : " + message : ""}` };
+    }
+    return { ...base, etat: "ok", heures, ratio, date: dernier.date, message,
+      resume: `ok — dernière exécution il y a ${formatDuration(heures * 3600000)} (${quand})` };
+  }
+
+  // Charge monitoring.json puis le fichier de suivi de chaque script
+  async function chargerScripts() {
+    const brut = await fetchRawFile(MONITORING_PATH, { tolerant: true });
+    if (brut === null) {
+      throw new Error(`${MONITORING_PATH} est absent du dépôt : aucun script n'est encore déclaré.`);
+    }
+
+    let config;
+    try {
+      config = JSON.parse(brut);
+    } catch (e) {
+      throw new Error(`${MONITORING_PATH} n'est pas du JSON valide.`);
+    }
+
+    const confs = (config.scripts || []).filter(s => s && s.id && s.actif !== false);
+    if (confs.length === 0) {
+      throw new Error(`Aucun script actif déclaré dans ${MONITORING_PATH}.`);
+    }
+
+    const resultats = await Promise.all(confs.map(async conf => {
+      let records = null;
+      try {
+        const texte = await fetchRawFile(fichierDuScript(conf), { tolerant: true });
+        if (texte !== null) {
+          const data = JSON.parse(texte);
+          records = extractRecords(data) || (data && typeof data === "object" ? [data] : null);
+        }
+      } catch (e) {
+        records = null; // fichier illisible : traité comme absent
+      }
+      return etatScript(conf, records);
+    }));
+
+    scriptsCache = resultats;
+    majBadgeScripts(resultats);
+    return resultats;
+  }
+
+  function majBadgeScripts(resultats) {
+    const enDefaut = resultats.filter(r => r.etat !== "ok").length;
+    scriptsBadge.textContent = enDefaut;
+    scriptsBadge.classList.toggle("show", enDefaut > 0);
+  }
+
+  // ---- Rendu du tableau de bord ----
+  function renderScriptsList(resultats) {
+    scriptsView.innerHTML = "";
+
+    const ordre = { erreur: 0, muet: 1, absent: 2, ok: 3 };
+    const tries = resultats.slice().sort((a, b) => ordre[a.etat] - ordre[b.etat]);
+
+    for (const res of tries) {
+      const c = couleurEtat(res);
+      const carte = document.createElement("button");
+      carte.className = "script-card";
+      carte.style.borderLeftColor = c.fond;
+
+      const pastille = document.createElement("span");
+      pastille.className = "pastille";
+      pastille.style.background = c.fond;
+      pastille.style.boxShadow = `0 0 10px ${c.fond}`;
+
+      const infos = document.createElement("div");
+      infos.className = "infos";
+      const nom = document.createElement("div");
+      nom.className = "nom";
+      nom.textContent = res.conf.nom || res.conf.id;
+      const etat = document.createElement("div");
+      etat.className = "etat";
+      etat.style.color = res.etat === "ok" ? "#8dffb0" : c.bord;
+      etat.textContent = res.resume;
+      infos.appendChild(nom);
+      infos.appendChild(etat);
+
+      const chevron = document.createElement("span");
+      chevron.className = "chevron";
+      chevron.textContent = "›";
+
+      carte.appendChild(pastille);
+      carte.appendChild(infos);
+      carte.appendChild(chevron);
+      carte.addEventListener("click", () => ouvrirDetail(res.conf.id));
+      scriptsView.appendChild(carte);
+    }
+  }
+
+  // ---- Lignes d'historique d'un script ----
+  function lignesHistorique(res) {
+    const avecDate = res.records
+      .map(r => ({ rec: r, date: extractDate(r) }))
+      .filter(x => x.date)
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 60);
+
+    return avecDate.map(({ rec, date }) => {
+      if (res.conf.type === "journal") {
+        const { isOk, label } = buildStatusLabel(rec, false);
+        return { text: `${formatDateFr(date)} — ${label}`,
+                 state: isOk === true ? "ok" : isOk === false ? "bad" : "unknown" };
+      }
+      const erreur = rec.statut === "erreur";
+      const msg = rec.message ? ` : ${rec.message}` : "";
+      return { text: `${formatDateFr(date)} — ${erreur ? "ERREUR" : "exécution ok"}${msg}`,
+               state: erreur ? "bad" : "ok" };
+    });
+  }
+
+  // ---- Fiche détaillée d'un script ----
+  function ouvrirDetail(id) {
+    const res = (scriptsCache || []).find(r => r.conf.id === id);
+    if (!res) return;
+
+    scriptDetail.innerHTML = "";
+    const c = couleurEtat(res);
+
+    const header = document.createElement("div");
+    header.className = "detail-header";
+    const retour = document.createElement("button");
+    retour.textContent = "‹ Tous les scripts";
+    retour.addEventListener("click", () => { showScriptsView(); });
+    const titre = document.createElement("h2");
+    titre.textContent = res.conf.nom || res.conf.id;
+    header.appendChild(retour);
+    header.appendChild(titre);
+
+    const banniere = document.createElement("div");
+    banniere.className = "detail-banner";
+    banniere.style.background = c.fond;
+    banniere.style.borderColor = c.bord;
+    banniere.style.boxShadow = `0 0 24px ${c.fond}`;
+    const libelle = { ok: "Fonctionne normalement", muet: "⚠ Script muet",
+                      erreur: "⚠ Erreur signalée", absent: "⚠ Aucun signe de vie" }[res.etat];
+    banniere.textContent = libelle;
+    const sous = document.createElement("span");
+    sous.className = "sous";
+    sous.textContent = res.resume;
+    banniere.appendChild(sous);
+
+    const meta = document.createElement("div");
+    meta.className = "detail-meta";
+    const dernierRec = res.records.length ? res.records[res.records.length - 1] : {};
+    const infos = [
+      ["identifiant", res.conf.id],
+      ["fichier de suivi", fichierDuScript(res.conf)],
+      ["seuil d'alerte", res.seuil + " h"],
+      ["relevés conservés", String(res.records.length)]
+    ];
+    if (dernierRec && dernierRec.machine) infos.push(["machine", dernierRec.machine]);
+    if (res.message) infos.push(["dernier message", res.message]);
+    for (const [k, v] of infos) {
+      const span = document.createElement("span");
+      span.textContent = k + " : ";
+      const b = document.createElement("b");
+      b.textContent = v;
+      span.appendChild(b);
+      meta.appendChild(span);
+    }
+
+    const titreHisto = document.createElement("div");
+    titreHisto.className = "highlight-label";
+    titreHisto.textContent = "Historique (du plus récent au plus ancien)";
+
+    const histo = document.createElement("div");
+    histo.className = "detail-histo";
+    const lignes = lignesHistorique(res);
+    if (lignes.length === 0) {
+      histo.innerHTML = '<div class="empty" style="color:var(--text-dim)">Aucun relevé daté disponible.</div>';
+    } else {
+      lignes.forEach((l, i) => {
+        const div = document.createElement("div");
+        div.className = "row " + l.state + (i === 0 ? " last" : "");
+        div.textContent = l.text;
+        histo.appendChild(div);
+      });
+    }
+
+    scriptDetail.appendChild(header);
+    scriptDetail.appendChild(banniere);
+    scriptDetail.appendChild(meta);
+    scriptDetail.appendChild(titreHisto);
+    scriptDetail.appendChild(histo);
+    showDetailView();
+  }
+
+  // ---- Bouton « Scripts » ----
+  async function fetchScripts() {
+    btnJournal.disabled = true;
+    btnSummary.disabled = true;
+    btnScripts.disabled = true;
+    setStatus("Lecture de " + MONITORING_PATH + " en cours…");
+    showScriptsView();
+    hideHighlight();
+    scriptsView.innerHTML = "";
+
+    try {
+      const resultats = await chargerScripts();
+      renderScriptsList(resultats);
+      const enDefaut = resultats.filter(r => r.etat !== "ok").length;
+      lastFetchEl.textContent = new Date().toLocaleString("fr-FR");
+      setStatus(
+        enDefaut === 0
+          ? `${resultats.length} script(s) surveillé(s), tous en bon état.`
+          : `${enDefaut} script(s) en défaut sur ${resultats.length}.`,
+        enDefaut === 0 ? "ok" : "error"
+      );
+    } catch (err) {
+      setStatus("Erreur : " + err.message, "error");
+      scriptsView.innerHTML = "";
+    } finally {
+      btnJournal.disabled = false;
+      btnSummary.disabled = false;
+      btnScripts.disabled = false;
+    }
+  }
+
+  btnScripts.addEventListener("click", fetchScripts);
+
   // init
   refreshTokenBadge();
   fetchSummary();
+  // Compteur du bouton « Scripts » calculé discrètement au démarrage
+  chargerScripts().catch(() => {});
   // L'ancienneté (et donc la couleur de l'alerte) est recalculée en continu
   setInterval(updateAlert, 30000);
 </script>
