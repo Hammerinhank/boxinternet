@@ -462,7 +462,7 @@
 <body>
 
 <div class="container" id="page-principale">
-    <h1>🚀 Le Déployeur <span id="version-badge" style="font-size:14px;color:#fff;background:#0071e3;font-weight:700;padding:3px 10px;border-radius:20px;vertical-align:middle;">v1.29</span></h1>
+    <h1>🚀 Le Déployeur <span id="version-badge" style="font-size:14px;color:#fff;background:#0071e3;font-weight:700;padding:3px 10px;border-radius:20px;vertical-align:middle;">v1.30</span></h1>
 
     <!-- 1. CONFIGURATION GITHUB -->
     <div class="card">
@@ -567,7 +567,7 @@
 
         <button class="btn" onclick="copierUrlAppli(this)" style="background-color: #34c759;" data-tip="Calcule l'adresse GitHub Pages de l'application sélectionnée (du type https://tonpseudo.github.io/depot/), la copie dans le presse-papier, et l'affiche juste en dessous sous forme de lien cliquable pour vérifier tout de suite qu'elle fonctionne bien.">🔗 Copier l'URL de l'appli</button>
         <div id="url-appli-ligne"></div>
-        <button class="btn" id="btn-history" style="background-color: #ff9500; margin-top: 10px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" data-tip="Récupère la liste des commits (versions successives) du fichier index.html de l'application sélectionnée, avec leur date et leur commentaire de version, pour pouvoir ensuite consulter, copier, télécharger ou restaurer une ancienne version ci-dessous. Reste appuyé plus de 5 secondes pour charger tout l'historique en continu (le bouton devient rouge) ; un simple appui dessus pendant qu'il est rouge arrête le chargement.">Charger l'historique</button>
+        <button class="btn" id="btn-history" style="background-color: #ff9500; margin-top: 10px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" data-tip="Récupère la liste des commits (versions successives) du fichier index.html de l'application sélectionnée, avec leur date et leur commentaire de version, pour pouvoir ensuite consulter, copier, télécharger ou restaurer une ancienne version ci-dessous. Un nouveau clic pendant que l'historique est affiché l'efface complètement de l'écran ; le clic suivant le recharge depuis GitHub. Reste appuyé plus de 5 secondes pour charger tout l'historique en continu (le bouton devient rouge) ; un simple appui dessus pendant qu'il est rouge arrête le chargement.">Charger l'historique</button>
 
         <div id="history-list" style="margin-top: 15px;"></div>
     </div>
@@ -3174,6 +3174,35 @@
         tester();
     }
 
+    // Bascule affichage / effacement de l'historique (v1.30)
+    // Un clic quand l'historique est affiché le retire réellement du document ;
+    // le clic suivant le recharge depuis GitHub.
+    function historiqueEstAffiche() {
+        const listDiv = document.getElementById('history-list');
+        return !!listDiv && listDiv.innerHTML.trim() !== "";
+    }
+
+    function viderHistorique() {
+        const listDiv = document.getElementById('history-list');
+        if (!listDiv) return;
+        // on supprime les éléments plutôt que de les masquer : le prochain clic
+        // repartira d'un historique entièrement rechargé
+        while (listDiv.firstChild) listDiv.removeChild(listDiv.firstChild);
+        afficherMessage(
+            "Historique effacé de l'écran.\n\n" +
+            "Reclique sur « Charger l'historique » pour le recharger depuis GitHub.",
+            "success"
+        );
+    }
+
+    function basculerHistorique() {
+        if (historiqueEstAffiche()) {
+            viderHistorique();
+            return;
+        }
+        chargerHistorique();
+    }
+
     async function chargerHistorique() {
         const repo = document.getElementById('select-history-target').value;
         const listDiv = document.getElementById('history-list');
@@ -3315,7 +3344,7 @@
                 extensionDoitSarreter = true;
                 return;
             }
-            chargerHistorique();
+            basculerHistorique();
         });
     }
 
@@ -4429,7 +4458,7 @@
         btnHistorique.className = 'btn';
         btnHistorique.style.cssText = 'background-color:#ff9500; margin-top:5px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;';
         btnHistorique.textContent = "Charger l'historique";
-        attacherTooltip(btnHistorique, `Récupère la liste des commits (versions successives) de « ${chemin} », avec leur date et leur commentaire de version, pour pouvoir ensuite consulter, copier, télécharger ou restaurer une ancienne version ci-dessous. Reste appuyé plus de 5 secondes pour charger tout l'historique en continu (le bouton devient rouge) ; un simple appui dessus pendant qu'il est rouge arrête le chargement.`);
+        attacherTooltip(btnHistorique, `Récupère la liste des commits (versions successives) de « ${chemin} », avec leur date et leur commentaire de version, pour pouvoir ensuite consulter, copier, télécharger ou restaurer une ancienne version ci-dessous. Un nouveau clic pendant que l'historique est affiché l'efface complètement de l'écran ; le clic suivant le recharge depuis GitHub. Reste appuyé plus de 5 secondes pour charger tout l'historique en continu (le bouton devient rouge) ; un simple appui dessus pendant qu'il est rouge arrête le chargement.`);
 
         const historiqueStatut = document.createElement('div');
         historiqueStatut.className = 'status';
