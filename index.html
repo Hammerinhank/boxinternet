@@ -76,7 +76,10 @@
     white-space: nowrap;
     box-shadow: 0 0 12px rgba(79,217,128,0.55);
     border: 1px solid var(--accent);
+    font-family: var(--mono);
+    cursor: pointer;
   }
+  .version:hover { background: #6cf79b; border-color: #6cf79b; color: var(--bg); }
 
   .card {
     width: 100%;
@@ -271,6 +274,75 @@
   #output-summary .row.unknown { color: #eef4f0; text-shadow: 0 0 6px rgba(238,244,240,0.3); }
   /* Ligne la plus récente (première affichée) en gras */
   #output-summary .row.last { font-weight: 700; }
+
+  /* ---- Vue « Synthèse » : une ligne par période calme, une ligne rouge par problème ---- */
+  #output-digest {
+    width: 100%;
+    min-height: 420px;
+    max-height: 70vh;
+    resize: vertical;
+    background: #0a0f0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    line-height: 1.7;
+    overflow: auto;
+    display: none;
+  }
+  #output-digest.show { display: block; }
+  #output-digest .digest-head {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  #output-digest .digest-head b { color: var(--text); font-weight: 600; }
+  #output-digest .row {
+    padding: 7px 0 7px 12px;
+    border-left: 4px solid transparent;
+    margin-bottom: 6px;
+    white-space: pre-wrap;
+  }
+  #output-digest .row.ok {
+    color: #8dffb0;
+    border-left-color: #4fd980;
+    text-shadow: 0 0 8px rgba(141,255,176,0.5);
+  }
+  #output-digest .row.bad {
+    color: #ff8484;
+    border-left-color: #ff6b6b;
+    background: rgba(255,107,107,0.07);
+    font-weight: 600;
+    text-shadow: 0 0 8px rgba(255,132,132,0.5);
+  }
+  #output-digest .row.unknown {
+    color: #eef4f0;
+    border-left-color: #7c9187;
+    text-shadow: 0 0 6px rgba(238,244,240,0.3);
+  }
+  #output-digest .row.last { font-weight: 700; }
+  #output-digest .empty { color: var(--text-dim); }
+
+  /* ---- Modale « historique des versions » ---- */
+  .modal.large { max-width: 640px; }
+  .histo-version { margin-bottom: 14px; }
+  .histo-version .num {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .histo-version ul { margin: 4px 0 0; padding-left: 20px; }
+  .histo-version li { font-size: 0.82rem; line-height: 1.5; color: var(--text-dim); }
+  .histo-note { font-size: 0.74rem; color: var(--text-dim); font-style: italic; margin-top: 10px; }
   /* ---- Vue « Configurer » : ajout / suppression de scripts surveillés ---- */
   #config-view { display: none; }
   #config-view.show { display: block; }
@@ -542,7 +614,7 @@
       <h1>Journal</h1>
       <span class="repo-tag">Hammerinhank/boxinternet · main</span>
     </div>
-    <div class="version" id="version-badge">v1.0.0</div>
+    <button class="version" id="version-badge" title="Voir l'historique des versions">v1.0.0</button>
   </div>
 
   <div id="alert-box">
@@ -559,6 +631,7 @@
     </div>
 
     <div class="controls">
+      <button id="btn-digest">◈ Synthèse</button>
       <button id="btn-summary">≣ Résumé</button>
       <button id="btn-journal">▶ Journal</button>
       <button id="btn-scripts">⌗ Scripts<span class="btn-badge" id="scripts-badge"></span></button>
@@ -576,6 +649,7 @@
 
     <textarea id="output" readonly placeholder="Le contenu de activity.json apparaîtra ici après un clic sur « Journal »…"></textarea>
     <div id="output-summary"></div>
+    <div id="output-digest"></div>
     <div id="scripts-view"></div>
     <div id="script-detail"></div>
 
@@ -662,6 +736,17 @@
 
   <footer>boxinternet journal viewer</footer>
 
+  <!-- Modale historique des versions -->
+  <div class="overlay" id="overlay-histo">
+    <div class="modal large">
+      <h2>Historique des versions</h2>
+      <div id="histo-content"></div>
+      <div class="modal-actions">
+        <button class="secondary" id="btn-close-histo">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modale token -->
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -684,8 +769,36 @@
   const FILE_PATH = "activity.json";
 
   // ---- Version : à incrémenter à chaque évolution ----
-  const APP_VERSION = "1.7.1";
+  const APP_VERSION = "1.8.0";
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
+
+  // Historique : une entrée par version, quelques lignes maximum
+  const VERSION_HISTORY = [
+    { num: "1.8.0", lignes: [
+      "Nouveau bouton « Synthèse », à gauche de « Résumé » : vue très condensée du journal.",
+      "Une ligne verte par période calme (« tout va bien de … à … »), une ligne rouge par relevé en problème.",
+      "Les trous du journal (aucun relevé pendant longtemps) sont signalés en rouge.",
+      "Le numéro de version devient un bouton ouvrant cet historique."
+    ]},
+    { num: "1.7.1", lignes: ["Ajustements d'affichage."] },
+    { num: "1.7.0", lignes: ["Page « Configurer » : déclarer ou retirer un script surveillé dans monitoring.json."] },
+    { num: "1.6.0", lignes: ["Page « Scripts » : un état par script surveillé (état, seuil, historique)."] },
+    { num: "1.5.0", lignes: ["Bandeau d'alerte quand le dernier relevé date de plus de 2 h, de plus en plus rouge avec l'ancienneté."] },
+    { num: "≤ 1.4", lignes: ["Vues « Journal » et « Résumé », encadré du dernier relevé, ordre anti-chronologique, token GitHub."] }
+  ];
+
+  const overlayHisto = document.getElementById("overlay-histo");
+  document.getElementById("histo-content").innerHTML =
+    VERSION_HISTORY.map(v =>
+      `<div class="histo-version"><span class="num">v${v.num}</span><ul>` +
+      v.lignes.map(l => `<li>${l}</li>`).join("") +
+      `</ul></div>`
+    ).join("") +
+    `<div class="histo-note">Les entrées antérieures à la 1.8.0 sont reconstituées a posteriori, donc approximatives.</div>`;
+
+  document.getElementById("version-badge").addEventListener("click", () => overlayHisto.classList.add("show"));
+  document.getElementById("btn-close-histo").addEventListener("click", () => overlayHisto.classList.remove("show"));
+  overlayHisto.addEventListener("click", (e) => { if (e.target === overlayHisto) overlayHisto.classList.remove("show"); });
 
   // Raccourci utilisé par toute la vue « Configurer »
   const $ = id => document.getElementById(id);
@@ -698,6 +811,8 @@
 
   const btnJournal = document.getElementById("btn-journal");
   const btnSummary = document.getElementById("btn-summary");
+  const btnDigest = document.getElementById("btn-digest");
+  const outputDigest = document.getElementById("output-digest");
   const btnScripts = document.getElementById("btn-scripts");
   const scriptsBadge = document.getElementById("scripts-badge");
   const scriptsView = document.getElementById("scripts-view");
@@ -945,45 +1060,26 @@
     return base64ToUtf8(data.content);
   }
 
-  function showTextView() {
-    outputSummary.classList.remove("show");
-    scriptsView.classList.remove("show");
-    scriptDetail.classList.remove("show");
-    document.getElementById("config-view").classList.remove("show");
-    output.style.display = "";
+  // Une seule vue visible à la fois ; « digest » = la nouvelle vue Synthèse
+  function showOnlyView(nom) {
+    output.style.display = nom === "text" ? "" : "none";
+    outputSummary.classList.toggle("show", nom === "summary");
+    outputDigest.classList.toggle("show", nom === "digest");
+    scriptsView.classList.toggle("show", nom === "scripts");
+    scriptDetail.classList.toggle("show", nom === "detail");
+    document.getElementById("config-view").classList.toggle("show", nom === "config");
   }
-  function showSummaryView() {
-    output.style.display = "none";
-    scriptsView.classList.remove("show");
-    scriptDetail.classList.remove("show");
-    document.getElementById("config-view").classList.remove("show");
-    outputSummary.classList.add("show");
-  }
-  function showScriptsView() {
-    output.style.display = "none";
-    outputSummary.classList.remove("show");
-    scriptDetail.classList.remove("show");
-    document.getElementById("config-view").classList.remove("show");
-    scriptsView.classList.add("show");
-  }
-  function showDetailView() {
-    output.style.display = "none";
-    outputSummary.classList.remove("show");
-    scriptsView.classList.remove("show");
-    document.getElementById("config-view").classList.remove("show");
-    scriptDetail.classList.add("show");
-  }
-  function showConfigView() {
-    output.style.display = "none";
-    outputSummary.classList.remove("show");
-    scriptsView.classList.remove("show");
-    scriptDetail.classList.remove("show");
-    document.getElementById("config-view").classList.add("show");
-  }
+  function showTextView() { showOnlyView("text"); }
+  function showSummaryView() { showOnlyView("summary"); }
+  function showDigestView() { showOnlyView("digest"); }
+  function showScriptsView() { showOnlyView("scripts"); }
+  function showDetailView() { showOnlyView("detail"); }
+  function showConfigView() { showOnlyView("config"); }
 
   async function fetchJournal() {
     btnJournal.disabled = true;
     btnSummary.disabled = true;
+    btnDigest.disabled = true;
     setStatus("Lecture de " + FILE_PATH + " en cours…");
     showTextView();
     hideHighlight();
@@ -1011,6 +1107,7 @@
     } finally {
       btnJournal.disabled = false;
       btnSummary.disabled = false;
+      btnDigest.disabled = false;
     }
   }
 
@@ -1152,6 +1249,7 @@
   async function fetchSummary() {
     btnJournal.disabled = true;
     btnSummary.disabled = true;
+    btnDigest.disabled = true;
     setStatus("Lecture de " + FILE_PATH + " en cours…");
     showSummaryView();
     hideHighlight();
@@ -1204,10 +1302,193 @@
     } finally {
       btnJournal.disabled = false;
       btnSummary.disabled = false;
+      btnDigest.disabled = false;
     }
   }
 
   btnSummary.addEventListener("click", fetchSummary);
+
+  // =========================================================================
+  //  Vue « Synthèse » (v1.8.0) — lecture d'un coup d'œil du journal
+  //  Une ligne verte par période calme, une ligne rouge par relevé en
+  //  problème, une ligne rouge par trou dans le journal. Les vues
+  //  « Journal », « Résumé », « Scripts » et « Configurer » sont inchangées.
+  // =========================================================================
+
+  const GAP_PLANCHER_MS = 2 * 3600 * 1000;   // jamais d'alerte de trou en dessous de 2 h
+  const GAP_FACTEUR = 3;                      // trou = 3 fois le rythme habituel
+
+  // Rythme habituel des relevés : médiane des écarts entre deux relevés successifs
+  function seuilTrou(dates) {
+    if (dates.length < 3) return GAP_PLANCHER_MS;
+    const ecarts = [];
+    for (let i = 1; i < dates.length; i++) ecarts.push(dates[i] - dates[i - 1]);
+    ecarts.sort((a, b) => a - b);
+    const mediane = ecarts[Math.floor(ecarts.length / 2)];
+    return Math.max(GAP_PLANCHER_MS, mediane * GAP_FACTEUR);
+  }
+
+  // Date en clair, avec une majuscule initiale
+  function dateFrCap(date) {
+    const t = formatDateFr(date);
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  // Découpe le journal en blocs : périodes calmes, problèmes, trous
+  function buildDigestBlocks(records) {
+    const dates = [];
+    const items = [];
+    const sansDate = [];
+
+    records.forEach((rec, i) => {
+      const d = extractDate(rec);
+      if (d) items.push({ rec, date: d, index: i });
+      else sansDate.push({ rec, index: i });
+    });
+    items.sort((a, b) => a.date - b.date);
+    items.forEach(it => dates.push(it.date));
+
+    const seuil = seuilTrou(dates);
+    const blocs = [];
+    let calme = null;
+
+    const cloreCalme = () => { if (calme) { blocs.push(calme); calme = null; } };
+
+    items.forEach((it, i) => {
+      // Trou avant ce relevé ?
+      if (i > 0) {
+        const precedent = items[i - 1].date;
+        const ecart = it.date - precedent;
+        if (ecart > seuil) {
+          cloreCalme();
+          blocs.push({ type: "trou", debut: precedent, fin: it.date, duree: ecart });
+        }
+      }
+
+      const { isOk, label } = buildStatusLabel(it.rec, false);
+
+      if (isOk === true) {
+        if (!calme) calme = { type: "calme", debut: it.date, fin: it.date, nb: 0 };
+        calme.fin = it.date;
+        calme.nb++;
+      } else {
+        cloreCalme();
+        blocs.push({ type: isOk === false ? "probleme" : "inconnu", date: it.date, label });
+      }
+    });
+    cloreCalme();
+
+    // Relevés sans date exploitable : signalés à part, jamais fondus dans une période calme
+    sansDate.forEach(it => {
+      const { label } = buildStatusLabel(it.rec, false);
+      blocs.push({ type: "inconnu", date: null, index: it.index, label: `date illisible — ${label}` });
+    });
+
+    return { blocs, seuil, premier: dates[0] || null, dernier: dates[dates.length - 1] || null, nbDates: dates.length };
+  }
+
+  // Une ligne de texte par bloc
+  function digestRow(bloc) {
+    if (bloc.type === "calme") {
+      const n = `${bloc.nb} relevé${bloc.nb > 1 ? "s" : ""}`;
+      const texte = bloc.nb === 1
+        ? `✓ Tout va bien — ${formatDateFr(bloc.debut)} (${n})`
+        : `✓ Tout va bien — du ${formatDateFr(bloc.debut)} au ${formatDateFr(bloc.fin)} (${n})`;
+      return { text: texte, state: "ok" };
+    }
+    if (bloc.type === "trou") {
+      return {
+        text: `✕ Aucun relevé pendant ${formatDuration(bloc.duree)} — entre ${formatDateFr(bloc.debut)} et ${formatDateFr(bloc.fin)}`,
+        state: "bad"
+      };
+    }
+    if (bloc.type === "probleme") {
+      return { text: `✕ ${dateFrCap(bloc.date)} — ${bloc.label}`, state: "bad" };
+    }
+    // statut non reconnu
+    const quand = bloc.date ? dateFrCap(bloc.date) : `Enregistrement #${(bloc.index || 0) + 1}`;
+    return { text: `? ${quand} — ${bloc.label}`, state: "unknown" };
+  }
+
+  async function fetchDigest() {
+    btnJournal.disabled = true;
+    btnSummary.disabled = true;
+    btnDigest.disabled = true;
+    setStatus("Lecture de " + FILE_PATH + " en cours…");
+    showDigestView();
+    hideHighlight();
+    outputDigest.innerHTML = "";
+
+    try {
+      const decoded = await fetchRawFile();
+      let parsed;
+      try {
+        parsed = JSON.parse(decoded);
+      } catch (e) {
+        throw new Error("Le fichier ne contient pas du JSON valide, impossible d'en faire la synthèse.");
+      }
+
+      const records = extractRecords(parsed);
+      if (!records) {
+        throw new Error("Format inattendu : impossible de trouver un tableau d'enregistrements dans le JSON.");
+      }
+      if (records.length === 0) {
+        outputDigest.innerHTML = '<div class="empty">Aucun enregistrement dans le fichier.</div>';
+        setStatus("Lecture réussie, mais le journal est vide.", "ok");
+        lastRecordDate = null;
+        hideAlert();
+        return;
+      }
+
+      lastRecordDate = computeLastRecordDate(records);
+      updateAlert();
+
+      const { blocs, seuil, premier, dernier, nbDates } = buildDigestBlocks(records);
+      const nbProblemes = blocs.filter(b => b.type === "probleme" || b.type === "trou").length;
+
+      // En-tête : la période couverte et le nombre de problèmes
+      const periode = (premier && dernier)
+        ? `du ${formatDateFr(premier)} au ${formatDateFr(dernier)}`
+        : "période indéterminée";
+      const entete =
+        `<div class="digest-head">` +
+        `Journal ${periode} — <b>${records.length}</b> relevé${records.length > 1 ? "s" : ""}` +
+        (nbDates !== records.length ? ` (dont ${records.length - nbDates} sans date lisible)` : "") +
+        ` · <b>${nbProblemes}</b> problème${nbProblemes > 1 ? "s" : ""}<br>` +
+        `Un silence de plus de ${formatDuration(seuil)} est compté comme un trou (trois fois le rythme habituel des relevés).` +
+        `</div>`;
+
+      // Du plus récent au plus ancien, comme le Résumé
+      const lignes = blocs.map(digestRow).reverse();
+      outputDigest.innerHTML = entete + lignes
+        .map((r, idx) => `<div class="row ${r.state}${idx === 0 ? " last" : ""}">${r.text.replace(/</g, "&lt;")}</div>`)
+        .join("");
+
+      // Encadré « dernier relevé », comme dans le Résumé
+      const lastRec = records[records.length - 1];
+      const highlight = buildHighlightSentence(lastRec, records.length - 1);
+      showHighlight(highlight.text, highlight.state);
+
+      const now = new Date();
+      lastFetchEl.textContent = now.toLocaleString("fr-FR");
+      setStatus(
+        nbProblemes === 0
+          ? `Synthèse générée : aucun problème sur ${records.length} relevé${records.length > 1 ? "s" : ""}.`
+          : `Synthèse générée : ${nbProblemes} problème${nbProblemes > 1 ? "s" : ""} sur ${records.length} relevé${records.length > 1 ? "s" : ""}.`,
+        nbProblemes === 0 ? "ok" : "error"
+      );
+    } catch (err) {
+      setStatus("Erreur : " + err.message, "error");
+      outputDigest.innerHTML = "";
+      hideHighlight();
+    } finally {
+      btnJournal.disabled = false;
+      btnSummary.disabled = false;
+      btnDigest.disabled = false;
+    }
+  }
+
+  btnDigest.addEventListener("click", fetchDigest);
 
   // =========================================================================
   //  Vue « Scripts » — un état clair par script surveillé (v1.6.0)
@@ -1480,6 +1761,7 @@
   async function fetchScripts() {
     btnJournal.disabled = true;
     btnSummary.disabled = true;
+    btnDigest.disabled = true;
     btnScripts.disabled = true;
     setStatus("Lecture de " + MONITORING_PATH + " en cours…");
     showScriptsView();
@@ -1503,6 +1785,7 @@
     } finally {
       btnJournal.disabled = false;
       btnSummary.disabled = false;
+      btnDigest.disabled = false;
       btnScripts.disabled = false;
     }
   }
