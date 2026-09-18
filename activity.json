@@ -17156,5 +17156,28 @@
     "decision_reboot": false,
     "raison": "internet_ok",
     "iteration": 1
+  },
+  {
+    "heure": "2026-09-18T22:33:30",
+    "tests_tcp": [
+      {
+        "host": "8.8.8.8",
+        "port": 53,
+        "ok": true
+      },
+      {
+        "host": "1.1.1.1",
+        "port": 53,
+        "ok": true
+      },
+      {
+        "host": "9.9.9.9",
+        "port": 53,
+        "ok": true
+      }
+    ],
+    "decision_reboot": false,
+    "raison": "internet_ok",
+    "iteration": 1
   }
 ]
